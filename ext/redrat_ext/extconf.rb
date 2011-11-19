@@ -12,8 +12,8 @@ pyconfig = with_config('python-config') || find_executable('python-config')
 
 if pyconfig
   $stderr.puts "Using config values from %s" % [ pyconfig ]
-  $CPPFLAGS << `"#{pyconfig}" --includes`.chomp
-  $LDFLAGS << `"#{pyconfig}" --libs`.chomp
+  $CPPFLAGS << ' ' + `"#{pyconfig}" --includes`.chomp + ' '
+  $LDFLAGS << ' ' + `"#{pyconfig}" --libs`.chomp + ' '
 else
   abort "No python-config binary, aborting"
 end
