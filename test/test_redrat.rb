@@ -41,6 +41,14 @@ class TestRedrat < Test::Unit::TestCase
     RedRat::apply(int_parse_function, '42')
   end
 
+  def test_repr
+    int_parse_function = RedRat::builtins['int']
+    p_42 = RedRat::apply(int_parse_function, '42')
+    if RedRat::repr(p_42) != '42'
+      raise
+    end
+  end
+
   def test_truth
     int_parse_function = RedRat::builtins['int']
     pv_42 = RedRat::apply(int_parse_function, '42')

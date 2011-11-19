@@ -63,6 +63,7 @@ static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
 static VALUE redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self);
 static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
+static VALUE redrat_repr(VALUE rPythonValue, VALUE self);
 
 /*
  * GLOBAL STATE
@@ -515,6 +516,39 @@ py_rb_error:
     Assert(false);
 }
 
+static VALUE
+redrat_repr(VALUE self, VALUE rPythonValue)
+{
+    PyGILState_STATE  gstate;
+    PyObject         *pReprThing;
+    PyObject         *pReprString = NULL;
+    VALUE             rRepr;
+    VALUE             rExcCantRepr;
+
+    Data_Get_Struct(rPythonValue, PyObject, pReprThing);
+
+    gstate = PyGILState_Ensure();
+
+    pReprString = PyObject_Repr(pReprThing);
+    REDRAT_ERRJMP_PYEXC(rExcCantRepr, pReprString);
+    Assert(PyString_Check(pReprString));
+    rRepr = rb_str_new2(PyString_AsString(pReprString));
+    Py_DECREF(pReprString);
+
+    PyGILState_Release(gstate);
+
+    return rRepr;
+
+py_rb_error:
+    Py_XDECREF(pReprString);
+    PyGILState_Release(gstate);
+
+    if (rExcCantRepr != Qnil)
+        rb_raise(rExcCantRepr,
+                 "redrat_ext: could not compute representation "
+                 "of Python object");
+}
+
 /*
  * Intermezzo: A bunch of operator overloads for common comparisons exposed to
  * Ruby.  Macros are used as a textual hack to make this more terse.
@@ -584,6 +618,7 @@ Init_redrat_ext()
     rb_define_module_function(rb_mRedRat, "builtins",
                               redrat_builtin_mapping, 0);
     rb_define_module_function(rb_mRedRat, "apply", redrat_apply, -1);
+    rb_define_module_function(rb_mRedRat, "repr", redrat_repr, 1);
 
     rb_cPythonValue = rb_define_class_under(
         rb_mRedRat, "PythonValue", rb_cObject);
