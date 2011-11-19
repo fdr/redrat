@@ -407,6 +407,7 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
                 PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
                 break;
             case T_OBJECT:
+            case T_DATA:
                 if (REDRAT_PYTHONVALUE_P(rCurrentArg))
                 {
                     Data_Get_Struct(rCurrentArg, PyObject, pArg);
