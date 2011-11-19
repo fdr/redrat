@@ -3,5 +3,8 @@ History.txt
 Manifest.txt
 README.txt
 Rakefile
+ext/redrat_ext/extconf.rb
+ext/redrat_ext/redrat_ext.c
+ext/redrat_ext/redrat_ext.h
 lib/redrat.rb
 test/test_redrat.rb
