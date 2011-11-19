@@ -61,7 +61,7 @@ static VALUE redrat_exception_convert();
 static PyObject *redrat_ruby_string_to_python(VALUE rStr);
 static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
 static VALUE redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self);
-static VALUE redrat_builtin_mapping(VALUE self, VALUE builtin_name);
+static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
 
 /*
@@ -291,7 +291,7 @@ py_rb_error:
  *     <module 'argparse' from '/usr/lib/python2.7/argparse.pyc'>
  */
 static VALUE
-redrat_builtin_mapping(VALUE self, VALUE builtin_name)
+redrat_builtin_mapping(VALUE self)
 {
     PyGILState_STATE     gstate;
 
