@@ -251,6 +251,8 @@ py_rb_error:
     Py_XDECREF(pSelf);
     Py_XDECREF(pResult);
 
+    PyErr_Clear();
+
     PyGILState_Release(gstate);
 
     if (rExcFromDelegation != Qnil)
@@ -379,6 +381,8 @@ py_rb_error:
     Py_XDECREF(key);
     Py_XDECREF(value);
 
+    PyErr_Clear();
+
     PyGILState_Release(gstate);
 
     if (rExcGetBuiltin != Qnil)
@@ -503,6 +507,8 @@ py_rb_error:
     Py_XDECREF(pArgs);
     Py_XDECREF(pResult);
 
+    PyErr_Clear();
+
     PyGILState_Release(gstate);
 
     if (rExcApplication != Qnil)
@@ -541,6 +547,9 @@ redrat_repr(VALUE self, VALUE rPythonValue)
 
 py_rb_error:
     Py_XDECREF(pReprString);
+
+    PyErr_Clear();
+
     PyGILState_Release(gstate);
 
     if (rExcCantRepr != Qnil)
@@ -595,6 +604,8 @@ py_rb_error:
         return rTruth;                                                        \
                                                                               \
     py_rb_error:                                                              \
+        PyErr_Clear();                                                        \
+                                                                              \
         PyGILState_Release(gstate);                                           \
                                                                               \
         if (rExc != Qnil)                                                     \
