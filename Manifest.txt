@@ -1,0 +1,7 @@
+.autotest
+History.txt
+Manifest.txt
+README.txt
+Rakefile
+lib/redrat.rb
+test/test_redrat.rb
