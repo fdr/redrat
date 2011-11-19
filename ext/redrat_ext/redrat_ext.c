@@ -269,8 +269,8 @@ py_rb_error:
 /*
  * redrat_builtin_mapping - The Root of All Things
  *
- * Retrieves a hash of Python builtins, from names (strings) to values
- * (PythonValues).  This is akin to executing __builtins__.__dict__ in Python.
+ * Retrieves a PythonValue that supports the dictionary protocol to access the
+ * builtins.
  *
  * From here, just about everything is possible because of the existence of
  * __import__.  An annotated example of what this C code is intended to enable
@@ -298,70 +298,23 @@ redrat_builtin_mapping(VALUE self)
 {
     PyGILState_STATE     gstate;
 
-    PyObject    *pBuiltins;
-    PyObject    *pBuiltinItems = NULL;
+    PyObject *pBuiltins;
 
-    VALUE       rExcGetBuiltin   = Qnil;
-    VALUE       rExcMappingItems = Qnil;
-    VALUE       rExcPairGet      = Qnil;
-    VALUE       rExcPairUnpack   = Qnil;
-    VALUE       rExcUnstringKey  = Qnil;
-
-    VALUE       rHashBuiltins = rb_hash_new();
-
-    /* For iteration over the builtins */
-    Py_ssize_t           item_len;
-    Py_ssize_t           item_iter;
-    PyObject            *pair       = NULL;
-    PyObject            *key        = NULL;
-    PyObject            *value      = NULL;
+    VALUE rExcGetBuiltin = Qnil;
+    VALUE rReturn;
 
     gstate = PyGILState_Ensure();
 
     pBuiltins = PyEval_GetBuiltins();
     REDRAT_ERRJMP_PYEXC(rExcGetBuiltin, pBuiltins);
     Py_INCREF(pBuiltins);
-
-    /* Extract the items from the mapping */
     Assert_PyMapping(pBuiltins);
-    pBuiltinItems = PyMapping_Items(pBuiltins);
-    REDRAT_ERRJMP_PYEXC(rExcMappingItems, pBuiltinItems);
 
-    item_len = PySequence_Length(pBuiltinItems);
-
-    for (item_iter = 0; item_iter < item_len; item_iter += 1)
-    {
-        VALUE rStrKey;
-        VALUE rPyValue;
-
-        pair = PySequence_GetItem(pBuiltinItems, item_iter);
-        REDRAT_ERRJMP_PYEXC(rExcPairGet, pair);
-
-        key = PySequence_GetItem(pair, 0);
-        REDRAT_ERRJMP_PYEXC(rExcPairUnpack, key);
-
-        if (PyString_Check(key))
-            rStrKey = rb_str_new2(PyString_AsString(key));
-        else
-        {
-
-            REDRAT_ERRJMP_PYEXC(rExcUnstringKey, key);
-        }
-
-        value = PySequence_GetItem(pair, 1);
-        REDRAT_ERRJMP_PYEXC(rExcPairUnpack, value);
-
-        rPyValue = redrat_ruby_handoff(value);
-        rb_hash_aset(rHashBuiltins, rStrKey, rPyValue);
-
-        Py_DECREF(pair);
-        Py_DECREF(key);
-        Py_DECREF(value);
-    }
+    rReturn = redrat_ruby_handoff(pBuiltins);
 
     PyGILState_Release(gstate);
 
-    return rHashBuiltins;
+    return rReturn;
 
 py_rb_error:
     /*
@@ -376,10 +329,6 @@ py_rb_error:
      * is such an example.
      */
     Py_XDECREF(pBuiltins);
-    Py_XDECREF(pBuiltinItems);
-    Py_XDECREF(pair);
-    Py_XDECREF(key);
-    Py_XDECREF(value);
 
     PyErr_Clear();
 
@@ -389,22 +338,6 @@ py_rb_error:
         rb_raise(rExcGetBuiltin,
                  "redrat_ext: couldn't read Python builtins, "
                  "RedRat cannot initialize");
-    else if (rExcMappingItems != Qnil)
-        rb_raise(rExcMappingItems,
-                 "redrat_ext: couldn't retrieve items from Python builtins, "
-                 "RedRat cannot initialize");
-    else if (rExcPairGet != Qnil)
-        rb_raise(rExcPairGet,
-                 "redrat_ext: couldn't retrieve an item from Python builtins, "
-                 "RedRat cannot initialize");
-    else if (rExcUnstringKey != Qnil)
-        rb_raise(rExcUnstringKey,
-                 "redrat_ext: retrieved a non-stringlike key from Python, "
-                 "RedRat cannot initialize");
-    else if (rExcPairUnpack != Qnil)
-        rb_raise(rExcPairUnpack,
-                 "redrat_ext: couldn't unpack an item from the Python builtin "
-                 "items, RedRat cannot initialize");
     else
         rb_fatal("redrat_ext: report this bug in redrat_builtin_mapping");
 
