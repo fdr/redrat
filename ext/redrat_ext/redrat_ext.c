@@ -479,7 +479,9 @@ redrat_python_exception_getter(VALUE self)
 
     /*
      * XXX: Should probably avoid re-handing-off new PythonValues to Ruby all
-     * the time.  That probably means understanding the mechanism
+     * the time.  That probably means understanding the mechanism behind class
+     * dispatch really well, which probably means reading Ruby source code and
+     * doing some educated guesswork.  LOL.
      */
     Data_Get_Struct(self, PyObject, pExc);
 
