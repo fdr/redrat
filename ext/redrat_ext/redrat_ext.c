@@ -540,6 +540,8 @@ py_rb_error:
                 rTruth = Qtrue;                                               \
                 break;                                                        \
             default:                                                          \
+                Assert(false)                                                 \
+                                                                              \
                 /* Quiet compiler */                                          \
                 rTruth = Qnil;                                                \
         }                                                                     \
