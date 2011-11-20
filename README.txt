@@ -4,12 +4,15 @@
 
 == DESCRIPTION:
 
-Ruby can be extended with C.  Python has an embedding guide.
+Ruby and Python speak C.
 
 == FEATURES/PROBLEMS:
 
 * Bootstraps low level access to Python constructs to enable Python
-  utilization in ruby.
+  utilization in Ruby.
+
+* Bootstraps low level access to Python constructs to enable Python
+  utilization in Ruby.
 
 == SYNOPSIS:
 
