@@ -357,8 +357,8 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
     PyObject *pArgs = NULL;
     PyObject *pResult;
 
-    VALUE rExcStringConvert;
-    VALUE rExcApplication;
+    VALUE rExcStringConvert = Qnil;
+    VALUE rExcApplication   = Qnil;
     VALUE rResult;
 
     int argIter;
