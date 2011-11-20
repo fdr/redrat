@@ -45,10 +45,27 @@ class TestRedrat < Test::Unit::TestCase
     RedRat::apply(int_parse_function, '42')
   end
 
+  def test_exception
+    begin
+      RedRat::apply(
+        RedRat::builtins.python_message(:__getitem__), 'really doesnt exist')
+    rescue RedRat::RedRatException => e
+      e.python_exception
+    end
+  end
+
   def test_repr
-    int_parse_function = get_builtin('int')
-    p_42 = RedRat::apply(int_parse_function, '42')
-    if RedRat::repr(p_42) != '42'
+    str = get_builtin('str')
+    p_hi = RedRat::apply(str, 'hi')
+    if RedRat::repr(p_hi) != '\'hi\''
+      raise
+    end
+  end
+
+  def test_str
+    str = get_builtin('str')
+    p_hi = RedRat::apply(str, 'hi')
+    if RedRat::str(p_hi) != 'hi'
       raise
     end
   end

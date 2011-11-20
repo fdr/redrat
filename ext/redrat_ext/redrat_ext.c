@@ -43,16 +43,29 @@
  * Macro to generate prototypes for Python comparison operations, this is
  * reused by redrat_compare_generate to generate the function bodies.
  */
-#define redrat_prototype_generate(OP)                                         \
+#define redrat_compare_generate_prototype(OP)                                 \
     static VALUE                                                              \
     redrat_ruby_python_##OP(VALUE self, VALUE other)                          \
 
-redrat_prototype_generate(LT);
-redrat_prototype_generate(LE);
-redrat_prototype_generate(EQ);
-redrat_prototype_generate(NE);
-redrat_prototype_generate(GT);
-redrat_prototype_generate(GE);
+redrat_compare_generate_prototype(LT);
+redrat_compare_generate_prototype(LE);
+redrat_compare_generate_prototype(EQ);
+redrat_compare_generate_prototype(NE);
+redrat_compare_generate_prototype(GT);
+redrat_compare_generate_prototype(GE);
+
+/*
+ * Macro to generate prototypes for Python functions that return strings.
+ * These are mostly intended to help with display and debugging, since there is
+ * actual type coercion to Ruby strings.
+ *
+ * Reused by redrat_stringify_generate.
+ */
+#define redrat_stringify_generate_prototype(lowcase)                          \
+    static VALUE redrat_##lowcase(VALUE self, VALUE rPythonValue)
+
+redrat_stringify_generate_prototype(repr);
+redrat_stringify_generate_prototype(str);
 
 /* Internal function definitions */
 static void redrat_py_decref_wrap(PyObject *freeing);
@@ -63,7 +76,7 @@ static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
 static VALUE redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self);
 static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
-static VALUE redrat_repr(VALUE rPythonValue, VALUE self);
+static VALUE redrat_python_exception_getter(VALUE self);
 
 /*
  * GLOBAL STATE
@@ -125,6 +138,13 @@ redrat_ruby_handoff(PyObject *gced_by_ruby)
                             gced_by_ruby);
 }
 
+static void
+redrat_rb_exc_raise(VALUE rExc, const char *reason)
+{
+    rb_iv_set(rExc, "redrat_reason", rb_str_new2(reason));
+    rb_exc_raise(rExc);
+}
+
 /*
  * redrat_exception_convert - Convert Python exceptions to Ruby exceptions
  *
@@ -143,19 +163,14 @@ redrat_exception_convert()
     if (pExc != NULL)
     {
         VALUE rExc;
-        PyObject *pExceptionString = PyObject_Str(pExc);
 
-        if (pExceptionString == NULL)
-            rb_raise(rb_eRedRatException,
-                     "could not retrieve Python exception error message");
-        else
-        {
-            Assert_PyString(pExceptionString);
-            rb_str_new2(PyString_AsString(pExceptionString));
-        }
-
-        rExc = rb_exc_new2(rb_eRedRatException, "Python Exception");
-        rb_iv_set(rExc, "python_exception", redrat_ruby_handoff(pExc));
+        /*
+         * Similar to redrat_ruby_handoff, except inheriting from the Exception
+         * hierarchy.
+         */
+        Py_INCREF(pExc);
+        rExc = Data_Wrap_Struct(rb_eRedRatException, NULL,
+                                redrat_py_decref_wrap, pExc);
 
         PyErr_Clear();
         return rExc;
@@ -258,12 +273,12 @@ py_rb_error:
     PyGILState_Release(gstate);
 
     if (rExcFromDelegation != Qnil)
-        rb_raise(rExcFromDelegation,
-                 "redrat_ext: Could not delegate to Python");
+        redrat_rb_exc_raise(rExcFromDelegation,
+                            "redrat_ext: Could not delegate to Python");
     else if (rExcFromStringCoercion != Qnil)
-        rb_raise(rExcFromStringCoercion,
-                 "redrat_ext: Could not convert Ruby symbol "
-                 "for delegation to Python");
+        redrat_rb_exc_raise(rExcFromStringCoercion,
+                            "redrat_ext: Could not convert Ruby symbol "
+                            "for delegation to Python");
 
     Assert(false);
 }
@@ -335,9 +350,9 @@ py_rb_error:
     PyGILState_Release(gstate);
 
     if (rExcGetBuiltin != Qnil)
-        rb_raise(rExcGetBuiltin,
-                 "redrat_ext: couldn't read Python builtins, "
-                 "RedRat cannot initialize");
+        redrat_rb_exc_raise(rExcGetBuiltin,
+                            "redrat_ext: couldn't read Python builtins, "
+                            "RedRat cannot initialize");
     else
         rb_fatal("redrat_ext: report this bug in redrat_builtin_mapping");
 
@@ -444,56 +459,69 @@ py_rb_error:
     PyGILState_Release(gstate);
 
     if (rExcApplication != Qnil)
-        rb_raise(rExcApplication,
-                 "redrat_ext: applied function raised an error");
+        redrat_rb_exc_raise(rExcApplication,
+                            "redrat_ext: applied function raised an error");
     else if (rExcStringConvert != Qnil)
-        rb_raise(rExcStringConvert,
-                 "redrat_ext: could not convert a Ruby string to a "
-                 "Python string during function application");
+        redrat_rb_exc_raise(rExcStringConvert,
+                            "redrat_ext: could not convert a Ruby string to a "
+                            "Python string during function application");
 
     Assert(false);
 }
 
 static VALUE
-redrat_repr(VALUE self, VALUE rPythonValue)
+redrat_python_exception_getter(VALUE self)
 {
-    PyGILState_STATE  gstate;
-    PyObject         *pReprThing;
-    PyObject         *pReprString = NULL;
-    VALUE             rRepr;
-    VALUE             rExcCantRepr;
+    PyObject *pExc;
 
-    Data_Get_Struct(rPythonValue, PyObject, pReprThing);
-
-    gstate = PyGILState_Ensure();
-
-    pReprString = PyObject_Repr(pReprThing);
-    REDRAT_ERRJMP_PYEXC(rExcCantRepr, pReprString);
-    Assert(PyString_Check(pReprString));
-    rRepr = rb_str_new2(PyString_AsString(pReprString));
-    Py_DECREF(pReprString);
-
-    PyGILState_Release(gstate);
-
-    return rRepr;
-
-py_rb_error:
-    Py_XDECREF(pReprString);
-
-    PyGILState_Release(gstate);
-
-    if (rExcCantRepr != Qnil)
-        rb_raise(rExcCantRepr,
-                 "redrat_ext: could not compute representation "
-                 "of Python object");
+    Data_Get_Struct(self, PyObject, pExc);
+    return redrat_ruby_handoff(pExc);
 }
+
+#define redrat_stringify_generate(lowcase, upcase)                            \
+    static VALUE                                                              \
+    redrat_##lowcase(VALUE self, VALUE rPythonValue)                          \
+    {                                                                         \
+        PyGILState_STATE  gstate;                                             \
+        PyObject         *pThing;                                             \
+        PyObject         *pString = NULL;                                     \
+        VALUE             r;                                                  \
+        VALUE             rExcCant;                                           \
+                                                                              \
+        Data_Get_Struct(rPythonValue, PyObject, pThing);                      \
+                                                                              \
+        gstate = PyGILState_Ensure();                                         \
+                                                                              \
+        pString = PyObject_##upcase(pThing);                                  \
+        REDRAT_ERRJMP_PYEXC(rExcCant, pString);                               \
+        Assert(PyString_Check(pString));                                      \
+        r = rb_str_new2(PyString_AsString(pString));                          \
+        Py_DECREF(pString);                                                   \
+                                                                              \
+        PyGILState_Release(gstate);                                           \
+                                                                              \
+        return r;                                                             \
+                                                                              \
+    py_rb_error:                                                              \
+        Py_XDECREF(pString);                                                  \
+                                                                              \
+        PyGILState_Release(gstate);                                           \
+                                                                              \
+        if (rExcCant != Qnil)                                                 \
+            redrat_rb_exc_raise(rExcCant,                                     \
+                                "redrat_ext: could not compute representation " \
+                                "of Python object");                          \
+    }
+
+redrat_stringify_generate(repr, Repr)
+redrat_stringify_generate(str, Str)
 
 /*
  * Intermezzo: A bunch of operator overloads for common comparisons exposed to
  * Ruby.  Macros are used as a textual hack to make this more terse.
  */
 #define redrat_compare_generate(OP)                                           \
-    redrat_prototype_generate(OP)                                             \
+    redrat_compare_generate_prototype(OP)                                     \
     {                                                                         \
         PyGILState_STATE         gstate;                                      \
         PyObject                *pSelf;                                       \
@@ -554,7 +582,7 @@ py_rb_error:
         PyGILState_Release(gstate);                                           \
                                                                               \
         if (rExc != Qnil)                                                     \
-            rb_raise(rExc, "redrat_ext: error during comparison");            \
+            redrat_rb_exc_raise(rExc, "redrat_ext: error during comparison"); \
                                                                               \
         Assert(false);                                                        \
         rb_fatal("redrat_ext: botched exception handling in comparison");     \
@@ -576,6 +604,7 @@ Init_redrat_ext()
                               redrat_builtin_mapping, 0);
     rb_define_module_function(rb_mRedRat, "apply", redrat_apply, -1);
     rb_define_module_function(rb_mRedRat, "repr", redrat_repr, 1);
+    rb_define_module_function(rb_mRedRat, "str", redrat_str, 1);
 
     rb_cPythonValue = rb_define_class_under(
         rb_mRedRat, "PythonValue", rb_cObject);
@@ -600,8 +629,15 @@ Init_redrat_ext()
     rb_define_method(rb_cPythonValue, "python_message",
                      redrat_ruby_delegate_python, -1);
 
+    /*
+     * The RedRatException type, which wraps (optionally) a RedRat reason for
+     * the exception as well as the underlying python_exception, which can be
+     * inspected as a normal PythonValue would.
+     */
     rb_eRedRatException = rb_define_class_under(rb_mRedRat, "RedRatException",
                                                 rb_eStandardError);
+    rb_define_method(rb_eRedRatException, "python_exception",
+                     redrat_python_exception_getter, 0);
 
     Py_Initialize();
 }
