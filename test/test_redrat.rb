@@ -3,7 +3,7 @@ require "redrat"
 
 class TestRedrat < Test::Unit::TestCase
   def get_builtin name
-    RedRat::apply(RedRat::builtins.__getitem__, name)
+    RedRat::apply(RedRat::builtins.python_message(:__getitem__), name)
   end
 
   def test_module_declaration

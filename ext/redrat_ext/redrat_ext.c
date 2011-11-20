@@ -597,7 +597,7 @@ Init_redrat_ext()
 
 
     /* Used for all other kinds of message and values */
-    rb_define_method(rb_cPythonValue, "method_missing",
+    rb_define_method(rb_cPythonValue, "python_message",
                      redrat_ruby_delegate_python, -1);
 
     rb_eRedRatException = rb_define_class_under(rb_mRedRat, "RedRatException",
