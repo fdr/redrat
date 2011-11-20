@@ -255,8 +255,6 @@ py_rb_error:
     Py_XDECREF(pSelf);
     Py_XDECREF(pResult);
 
-    PyErr_Clear();
-
     PyGILState_Release(gstate);
 
     if (rExcFromDelegation != Qnil)
@@ -333,8 +331,6 @@ py_rb_error:
      * is such an example.
      */
     Py_XDECREF(pBuiltins);
-
-    PyErr_Clear();
 
     PyGILState_Release(gstate);
 
@@ -445,8 +441,6 @@ py_rb_error:
     Py_XDECREF(pArgs);
     Py_XDECREF(pResult);
 
-    PyErr_Clear();
-
     PyGILState_Release(gstate);
 
     if (rExcApplication != Qnil)
@@ -486,8 +480,6 @@ redrat_repr(VALUE self, VALUE rPythonValue)
 py_rb_error:
     Py_XDECREF(pReprString);
 
-    PyErr_Clear();
-
     PyGILState_Release(gstate);
 
     if (rExcCantRepr != Qnil)
@@ -526,15 +518,30 @@ py_rb_error:
             case -1:                                                          \
                 rExc = redrat_exception_convert();                            \
                 if (rExc != Qnil)                                             \
+                {                                                             \
+                    /*                                                        \
+                     * PyErr_Clear normally handled by the                    \
+                     * REDRAT_ERRJMP_PYEXC macro                              \
+                     */                                                       \
+                    PyErr_Clear();                                            \
                     goto py_rb_error;                                         \
+                }                                                             \
                 else                                                          \
+                {                                                             \
                     Assert(false);                                            \
+                                                                              \
+                    /* Quiet compiler */                                      \
+                    rTruth = Qnil;                                            \
+                }                                                             \
             case 0:                                                           \
                 rTruth = Qfalse;                                              \
                 break;                                                        \
             case 1:                                                           \
                 rTruth = Qtrue;                                               \
                 break;                                                        \
+            default:                                                          \
+                /* Quiet compiler */                                          \
+                rTruth = Qnil;                                                \
         }                                                                     \
                                                                               \
         PyGILState_Release(gstate);                                           \
@@ -542,14 +549,13 @@ py_rb_error:
         return rTruth;                                                        \
                                                                               \
     py_rb_error:                                                              \
-        PyErr_Clear();                                                        \
-                                                                              \
         PyGILState_Release(gstate);                                           \
                                                                               \
         if (rExc != Qnil)                                                     \
             rb_raise(rExc, "redrat_ext: error during comparison");            \
                                                                               \
         Assert(false);                                                        \
+        rb_fatal("redrat_ext: botched exception handling in comparison");     \
     }
 
 redrat_compare_generate(LT);
