@@ -51,6 +51,7 @@ class TestRedrat < Test::Unit::TestCase
         RedRat::builtins.python_message(:__getitem__), 'really doesnt exist')
     rescue RedRat::RedRatException => e
       e.python_exception
+      e.redrat_reason
     end
   end
 

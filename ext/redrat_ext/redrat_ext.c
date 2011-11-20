@@ -141,7 +141,7 @@ redrat_ruby_handoff(PyObject *gced_by_ruby)
 static void
 redrat_rb_exc_raise(VALUE rExc, const char *reason)
 {
-    rb_iv_set(rExc, "redrat_reason", rb_str_new2(reason));
+    rb_iv_set(rExc, "@redrat_reason", rb_str_new2(reason));
     rb_exc_raise(rExc);
 }
 
@@ -637,6 +637,7 @@ Init_redrat_ext()
      */
     rb_eRedRatException = rb_define_class_under(rb_mRedRat, "RedRatException",
                                                 rb_eStandardError);
+    rb_define_attr(rb_eRedRatException, "redrat_reason", 1, 0);
     rb_define_method(rb_eRedRatException, "python_exception",
                      redrat_python_exception_getter, 0);
 
