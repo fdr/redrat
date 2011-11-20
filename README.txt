@@ -16,8 +16,18 @@ Ruby and Python speak C.
 
 == SYNOPSIS:
 
-   argparse = RedRat::apply(RedRat::builtins.__import__, 'argparse')
-   argparse.
+   require 'redrat'
+
+   def get_builtin name
+     RedRat::apply(RedRat::builtins.python_message(:__getitem__), name)
+   end
+
+   # Only comes with Python in version 2.7
+   import = get_builtin '__import__'
+   argparse = RedRat::apply(import, 'argparse')
+   argparse
+   ArgumentParser = argparse.python_message(:ArgumentParser)
+   RedRat::apply(get_builtin('help'), ArgumentParser)
 
 == REQUIREMENTS:
 
