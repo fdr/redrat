@@ -225,11 +225,15 @@ redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self)
         rb_raise(rb_eArgError,
                  "redrat_ext: only instance variable accesses are allowed");
 
+    if (!SYMBOL_P(argv[0]))
+        rb_raise(rb_eArgError,
+                 "redrat_ext: only symbols can be delegated to Python");
+
     rSym = argv[0];
-    Assert(SYMBOL_P(rSym));
 
     gstate = PyGILState_Ensure();
 
+    Assert(SYMBOL_P(rSym));
     pMessageName = redrat_ruby_symbol_to_python_string(rSym);
     REDRAT_ERRJMP_PYEXC(rExcFromStringCoercion, pMessageName);
 
