@@ -472,10 +472,23 @@ py_rb_error:
 static VALUE
 redrat_python_exception_getter(VALUE self)
 {
-    PyObject *pExc;
+    PyGILState_STATE  gstate;
 
+    PyObject         *pExc;
+    VALUE             retval;
+
+    /*
+     * XXX: Should probably avoid re-handing-off new PythonValues to Ruby all
+     * the time.  That probably means understanding the mechanism
+     */
     Data_Get_Struct(self, PyObject, pExc);
-    return redrat_ruby_handoff(pExc);
+
+    gstate = PyGILState_Ensure();
+
+    retval = redrat_ruby_handoff(pExc);
+
+    PyGILState_Release(gstate);
+    return retval;
 }
 
 #define redrat_stringify_generate(lowcase, upcase)                            \
