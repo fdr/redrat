@@ -76,15 +76,28 @@ static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
 static VALUE redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self);
 static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
+static VALUE redrat_python_unicode(VALUE self, VALUE rVal);
 static VALUE redrat_python_exception_getter(VALUE self);
 
 /*
  * GLOBAL STATE
  *
- * These variables hold basic concepts exposed to the Ruby runtime.  If a Ruby
- * ever supports multiple interpreter states (passing that information to
- * something like Init_redrat_ext), then these should occupy a struct that can
- * be passed to every extension function.
+ * These variables hold basic concepts exposed to the Ruby and Python runtimes.
+ * If a Ruby ever supports sufficiently separated multiple interpreter states
+ * (passing that information to something like Init_redrat_ext), then these
+ * should occupy a struct that can be passed to every extension function.
+ *
+ * TODO: Right now sub-interpreters for Python are not supported.  That
+ * limitation should be lifted, which will mean creating a new Object in Ruby
+ * that calls the Py_NewInterpreter() function (let's call it
+ * RedRat::PythonInterpreter), and holds a reference to the subinterpreter, and
+ * each one of those should possess references to their Python-loaded RubyValue
+ * and RubyException types.  It also means globally accessed builtins like
+ * apply, repr, and str latch onto an interpreter state instead singletons of
+ * the Module, as they do now.  Py_EndInterpreter will need to be called upon
+ * the garbage collection of a PythonInterpreter instance, and
+ * PyThreadState_Swap will need to be called when messages on those
+ * PythonInterpreter instances are accessed.
  */
 
 /* The RedRat Module */
@@ -95,6 +108,12 @@ static VALUE rb_cPythonValue;
 
 /* The RedRat::RedRatException class */
 static VALUE rb_eRedRatException;
+
+/* The Python Type that delegates to Ruby Values */
+static PyTypeObject *pRubyValueType;
+
+/* The Python Type that delegates to Ruby Values */
+static PyTypeObject *pRubyExceptionType;
 
 /*
  * INTERNAL PROCEDURE DEFINITIONS
@@ -414,29 +433,16 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
 
         Assert(PyTuple_Size(pArgs) > tupleWritePosition);
 
-        switch (TYPE(rCurrentArg))
+        if (TYPE(rCurrentArg) == T_DATA && REDRAT_PYTHONVALUE_P(rCurrentArg))
         {
-            case T_STRING:
-                pArg = redrat_ruby_string_to_python(rCurrentArg);
-                REDRAT_ERRJMP_PYEXC(rExcStringConvert, pArg);
-                PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
-                break;
-            case T_OBJECT:
-            case T_DATA:
-                if (REDRAT_PYTHONVALUE_P(rCurrentArg))
-                {
-                    Data_Get_Struct(rCurrentArg, PyObject, pArg);
-                    Py_INCREF(pArg);
-                    PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
-                    break;
-                }
-
-                /* Intentional fall-through */
-            default:
-                rb_raise(rb_eArgError,
-                         "redrat_ext: Only Ruby Strings and PythonValues "
-                         "are supported in RedRat apply");
+            Data_Get_Struct(rCurrentArg, PyObject, pArg);
+            Py_INCREF(pArg);
+            PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
         }
+        else
+            rb_raise(rb_eArgError,
+                     "redrat_ext: Only PythonValues are supported in "
+                     "RedRat apply");
     }
 
     pResult = PyObject_Call(pMaybeCallable, pArgs, NULL);
@@ -467,6 +473,57 @@ py_rb_error:
                             "Python string during function application");
 
     Assert(false);
+}
+
+static VALUE
+redrat_python_unicode(VALUE self, VALUE rVal)
+{
+    if (TYPE(rVal) == T_STRING)
+    {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+
+        PyObject *pUnicode;
+        VALUE     rExcPythonUnicode = Qnil;
+        VALUE     rRetVal;
+
+        pUnicode = redrat_ruby_string_to_python(rVal);
+        REDRAT_ERRJMP_PYEXC(rExcPythonUnicode, pUnicode);
+
+        rRetVal = redrat_ruby_handoff(pUnicode);
+        Py_DECREF(pUnicode);
+
+        PyGILState_Release(gstate);
+
+        return rRetVal;
+
+py_rb_error:
+        /*
+         * This is the only error path, so this should never be non-NULL, yet
+         * do the normal XDECREF handling for idiom's sake.
+         */
+        Assert(pUnicode == NULL);
+        Py_XDECREF(pUnicode);
+
+        PyGILState_Release(gstate);
+
+        /*
+         * There is only one error path, so this must be the exception
+         * condition raised, but follow the usual error handling protocol
+         * anyway, which involves checking the exception for Nillity.
+         */
+        Assert(rExcPythonUnicode != Qnil);
+        if (rExcPythonUnicode != Qnil)
+            redrat_rb_exc_raise(
+                rExcPythonUnicode,
+                "redrat_exc: could not construct PythonValue from "
+                "Ruby String");
+
+        Assert(false);
+    }
+    else
+        rb_raise(rb_eArgError,
+                 "redrat_ext: Only Ruby Strings are accepted when "
+                 "constructing Python Unicode");
 }
 
 static VALUE
@@ -619,14 +676,16 @@ Init_redrat_ext()
     rb_define_module_function(rb_mRedRat, "builtins",
                               redrat_builtin_mapping, 0);
     rb_define_module_function(rb_mRedRat, "apply", redrat_apply, -1);
+    rb_define_module_function(rb_mRedRat, "unicode", redrat_python_unicode, 1);
+
+    /* Generated, see redrat_stringify_generate */
     rb_define_module_function(rb_mRedRat, "repr", redrat_repr, 1);
     rb_define_module_function(rb_mRedRat, "str", redrat_str, 1);
 
     rb_cPythonValue = rb_define_class_under(
         rb_mRedRat, "PythonValue", rb_cObject);
 
-    /* Comparison operator definitions */
-
+    /* Comparison operator definitions, generated by redrat_compare_generate */
     rb_define_method(rb_cPythonValue, "<",
                      redrat_ruby_python_LT, 1);
     rb_define_method(rb_cPythonValue, "<=",

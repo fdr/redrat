@@ -3,7 +3,8 @@ require "redrat"
 
 class TestRedrat < Test::Unit::TestCase
   def get_builtin name
-    RedRat::apply(RedRat::builtins.python_message(:__getitem__), name)
+    RedRat::apply(RedRat::builtins.python_message(:__getitem__),
+      RedRat::unicode(name))
   end
 
   def test_module_declaration
@@ -42,13 +43,14 @@ class TestRedrat < Test::Unit::TestCase
 
   def test_function_call_from_string
     int_parse_function = get_builtin('int')
-    RedRat::apply(int_parse_function, '42')
+    RedRat::apply(int_parse_function, RedRat::unicode('42'))
   end
 
   def test_exception
     begin
       RedRat::apply(
-        RedRat::builtins.python_message(:__getitem__), 'really doesnt exist')
+        RedRat::builtins.python_message(:__getitem__),
+        RedRat::unicode('really doesnt exist'))
     rescue RedRat::RedRatException => e
       e.python_exception
       e.redrat_reason
@@ -57,7 +59,7 @@ class TestRedrat < Test::Unit::TestCase
 
   def test_repr
     str = get_builtin('str')
-    p_hi = RedRat::apply(str, 'hi')
+    p_hi = RedRat::apply(str, RedRat::unicode('hi'))
     if RedRat::repr(p_hi) != '\'hi\''
       raise
     end
@@ -65,7 +67,7 @@ class TestRedrat < Test::Unit::TestCase
 
   def test_str
     str = get_builtin('str')
-    p_hi = RedRat::apply(str, 'hi')
+    p_hi = RedRat::apply(str, RedRat::unicode('hi'))
     if RedRat::str(p_hi) != 'hi'
       raise
     end
@@ -73,8 +75,8 @@ class TestRedrat < Test::Unit::TestCase
 
   def test_truth
     int_parse_function = get_builtin('int')
-    pv_42 = RedRat::apply(int_parse_function, '42')
-    pv_32 = RedRat::apply(int_parse_function, '32')
+    pv_42 = RedRat::apply(int_parse_function, RedRat::unicode('42'))
+    pv_32 = RedRat::apply(int_parse_function, RedRat::unicode('32'))
 
     if pv_42 < pv_32
       raise
