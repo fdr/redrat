@@ -3,7 +3,8 @@ require "redrat"
 
 class TestRedrat < Test::Unit::TestCase
   def get_builtin name
-    RedRat::apply(RedRat::builtins.python_message(:__getitem__),
+    RedRat::apply(
+      RedRat::getattr(RedRat::builtins, :__getitem__),
       RedRat::unicode(name))
   end
 
@@ -48,9 +49,7 @@ class TestRedrat < Test::Unit::TestCase
 
   def test_exception
     begin
-      RedRat::apply(
-        RedRat::builtins.python_message(:__getitem__),
-        RedRat::unicode('really doesnt exist'))
+      get_builtin 'really doesn\'t exist'
     rescue RedRat::RedRatException => e
       e.python_exception
       e.redrat_reason

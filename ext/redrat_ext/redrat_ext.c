@@ -73,7 +73,7 @@ static VALUE redrat_ruby_handoff(PyObject *gced_by_ruby);
 static VALUE redrat_exception_convert();
 static PyObject *redrat_ruby_string_to_python(VALUE rStr);
 static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
-static VALUE redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self);
+static VALUE redrat_ruby_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol);
 static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
 static VALUE redrat_python_unicode(VALUE self, VALUE rVal);
@@ -231,17 +231,10 @@ redrat_ruby_symbol_to_python_string(VALUE rSym)
  */
 
 /*
- * redrat_ruby_delegate_python - Delegate Ruby messages to Python
- *
- * This has the distinction of only supporting textual types.  If one wants a
- * Python integer or list, one should instead construct values from unicode
- * literals and then use the resulting PythonValues.  The goal is to avoid the
- * datatype-conversion tarpit as a semantic crutch -- if such conversions ever
- * become added, it is hopefully clear as an optimization rather than a
- * necessary mechanic.
+ * redrat_ruby_getattr - Get attributes from to Python by Ruby Symbol
  */
 static VALUE
-redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self)
+redrat_ruby_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol)
 {
     PyGILState_STATE    gstate;
 
@@ -249,44 +242,44 @@ redrat_ruby_delegate_python(int argc, VALUE *argv, VALUE self)
     VALUE       rExcFromDelegation     = Qnil;
     VALUE       rSym;
 
-    PyObject    *pMessageName = NULL;
-    PyObject    *pSelf        = NULL;
-    PyObject    *pResult      = NULL;
+    PyObject *pAttrName = NULL;
+    PyObject *pTarget   = NULL;
+    PyObject *pResult   = NULL;
 
     VALUE       rResult;
 
-    if (argc > 1)
+    if (!REDRAT_PYTHONVALUE_P(rTarget))
         rb_raise(rb_eArgError,
-                 "redrat_ext: only instance variable accesses are allowed");
+                 "redrat_ext: Only PythonValues support getattr");
 
-    if (!SYMBOL_P(argv[0]))
+    if (!SYMBOL_P(rAttrSymbol))
         rb_raise(rb_eArgError,
                  "redrat_ext: only symbols can be delegated to Python");
 
-    rSym = argv[0];
-
     gstate = PyGILState_Ensure();
 
-    Assert(SYMBOL_P(rSym));
-    pMessageName = redrat_ruby_symbol_to_python_string(rSym);
-    REDRAT_ERRJMP_PYEXC(rExcFromStringCoercion, pMessageName);
 
-    Data_Get_Struct(self, PyObject, pSelf);
-    Py_INCREF(pSelf);
+    Assert(SYMBOL_P(rAttrSymbol));
+    pAttrName = redrat_ruby_symbol_to_python_string(rAttrSymbol);
+    REDRAT_ERRJMP_PYEXC(rExcFromStringCoercion, pAttrName);
 
-    pResult = PyObject_GenericGetAttr(pSelf, pMessageName);
+    Assert(REDRAT_PYTHONVALUE_P(rTarget));
+    Data_Get_Struct(rTarget, PyObject, pTarget);
+    Py_INCREF(pTarget);
+
+    pResult = PyObject_GenericGetAttr(pTarget, pAttrName);
     REDRAT_ERRJMP_PYEXC(rExcFromDelegation, pResult);
 
     rResult = redrat_ruby_handoff(pResult);
-    Py_DECREF(pSelf);
+    Py_DECREF(pTarget);
 
     PyGILState_Release(gstate);
 
     return rResult;
 
 py_rb_error:
-    Py_XDECREF(pMessageName);
-    Py_XDECREF(pSelf);
+    Py_XDECREF(pAttrName);
+    Py_XDECREF(pTarget);
     Py_XDECREF(pResult);
 
     PyGILState_Release(gstate);
@@ -677,6 +670,7 @@ Init_redrat_ext()
                               redrat_builtin_mapping, 0);
     rb_define_module_function(rb_mRedRat, "apply", redrat_apply, -1);
     rb_define_module_function(rb_mRedRat, "unicode", redrat_python_unicode, 1);
+    rb_define_module_function(rb_mRedRat, "getattr", redrat_ruby_getattr, 2);
 
     /* Generated, see redrat_stringify_generate */
     rb_define_module_function(rb_mRedRat, "repr", redrat_repr, 1);
@@ -698,11 +692,6 @@ Init_redrat_ext()
                      redrat_ruby_python_GT, 1);
     rb_define_method(rb_cPythonValue, ">=",
                      redrat_ruby_python_GE, 1);
-
-
-    /* Used for all other kinds of message and values */
-    rb_define_method(rb_cPythonValue, "python_message",
-                     redrat_ruby_delegate_python, -1);
 
     /*
      * The RedRatException type, which wraps (optionally) a RedRat reason for
