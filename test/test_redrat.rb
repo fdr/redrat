@@ -2,6 +2,10 @@ require "test/unit"
 require "redrat"
 
 class TestRedrat < Test::Unit::TestCase
+  def get_builtin name
+    RedRat::apply(RedRat::builtins.__getitem__, name)
+  end
+
   def test_module_declaration
     RedRat
   end
@@ -11,7 +15,7 @@ class TestRedrat < Test::Unit::TestCase
   end
 
   def test_property_access
-    RedRat::builtins['str'].join
+    get_builtin('str')
   end
 
   def test_must_reject_no_args_to_apply
@@ -37,12 +41,12 @@ class TestRedrat < Test::Unit::TestCase
   end
 
   def test_function_call_from_string
-    int_parse_function = RedRat::builtins['int']
+    int_parse_function = get_builtin('int')
     RedRat::apply(int_parse_function, '42')
   end
 
   def test_repr
-    int_parse_function = RedRat::builtins['int']
+    int_parse_function = get_builtin('int')
     p_42 = RedRat::apply(int_parse_function, '42')
     if RedRat::repr(p_42) != '42'
       raise
@@ -50,7 +54,7 @@ class TestRedrat < Test::Unit::TestCase
   end
 
   def test_truth
-    int_parse_function = RedRat::builtins['int']
+    int_parse_function = get_builtin('int')
     pv_42 = RedRat::apply(int_parse_function, '42')
     pv_32 = RedRat::apply(int_parse_function, '32')
 
