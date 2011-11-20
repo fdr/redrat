@@ -508,9 +508,10 @@ redrat_python_exception_getter(VALUE self)
         PyGILState_Release(gstate);                                           \
                                                                               \
         if (rExcCant != Qnil)                                                 \
-            redrat_rb_exc_raise(rExcCant,                                     \
-                                "redrat_ext: could not compute representation " \
-                                "of Python object");                          \
+            redrat_rb_exc_raise(                                              \
+                rExcCant,                                                     \
+                "redrat_ext: could not compute representation of "            \
+                "Python object");                                             \
     }
 
 redrat_stringify_generate(repr, Repr)
