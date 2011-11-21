@@ -40,21 +40,6 @@
     } while (0)
 
 /*
- * Macro to generate prototypes for Python comparison operations, this is
- * reused by redrat_compare_generate to generate the function bodies.
- */
-#define redrat_compare_generate_prototype(OP)                                 \
-    static VALUE                                                              \
-    redrat_ruby_python_##OP(VALUE self, VALUE other)                          \
-
-redrat_compare_generate_prototype(LT);
-redrat_compare_generate_prototype(LE);
-redrat_compare_generate_prototype(EQ);
-redrat_compare_generate_prototype(NE);
-redrat_compare_generate_prototype(GT);
-redrat_compare_generate_prototype(GE);
-
-/*
  * Macro to generate prototypes for Python functions that return strings.
  * These are mostly intended to help with display and debugging, since there is
  * actual type coercion to Ruby strings.
@@ -76,6 +61,7 @@ static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
 static VALUE redrat_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol);
 static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
+static VALUE redrat_truth(VALUE self, VALUE rVal);
 static VALUE redrat_unicode(VALUE self, VALUE rVal);
 static VALUE redrat_python_exception_getter(VALUE self);
 
@@ -469,6 +455,64 @@ py_rb_error:
 }
 
 static VALUE
+redrat_truth(VALUE self, VALUE rVal)
+{
+    PyGILState_STATE gstate;
+
+    PyObject *pVal;
+    VALUE     rTruth;
+
+    if (!REDRAT_PYTHONVALUE_P(rVal))
+        rb_raise(rb_eArgError,
+                 "redrat_ext: truth can only accept a PythonValue");
+
+    Assert(REDRAT_PYTHONVALUE_P(rVal));
+    Data_Get_Struct(rVal, PyObject, pVal);
+
+    gstate = PyGILState_Ensure();
+
+    switch (PyObject_Not(pVal))
+    {
+        case -1:
+            goto py_rb_error;
+        case 0:
+            rTruth = Qtrue;
+            break;
+        case 1:
+            rTruth = Qfalse;
+            break;
+        default:
+            Assert(false);
+            rb_fatal("redrat_ext: received totally unexpected return code in "
+                     "redrat_truth");
+            rTruth = Qnil;
+    }
+
+    PyGILState_Release(gstate);
+
+    return rTruth;
+
+py_rb_error:
+    {
+        VALUE     rExc;
+
+        /*
+         * Assumption: getting here means that a Python Exception will be
+         * found.  That may be a false one, though, and in general this
+         * function will screw up the GIL state when that happens.
+         */
+        rExc = redrat_exception_convert();
+        PyErr_Clear();
+
+        PyGILState_Release(gstate);
+
+        redrat_rb_exc_raise(
+            rExc, "redrat_ext: could not compute truth value for PythonValue");
+        Assert(false);
+    }
+}
+
+static VALUE
 redrat_unicode(VALUE self, VALUE rVal)
 {
     if (TYPE(rVal) == T_STRING)
@@ -582,85 +626,6 @@ redrat_python_exception_getter(VALUE self)
 redrat_stringify_generate(repr, Repr)
 redrat_stringify_generate(str, Str)
 
-/*
- * Intermezzo: A bunch of operator overloads for common comparisons exposed to
- * Ruby.  Macros are used as a textual hack to make this more terse.
- */
-#define redrat_compare_generate(OP)                                           \
-    redrat_compare_generate_prototype(OP)                                     \
-    {                                                                         \
-        PyGILState_STATE         gstate;                                      \
-        PyObject                *pSelf;                                       \
-        PyObject                *pOther;                                      \
-        VALUE                    rTruth;                                      \
-        VALUE                    rExc;                                        \
-                                                                              \
-        if (!REDRAT_PYTHONVALUE_P(self))                                      \
-            rb_raise(rb_eTypeError,                                           \
-                     "redrat_ext: self must be a PythonValue");               \
-        else if (!REDRAT_PYTHONVALUE_P(other))                                \
-            rb_raise(rb_eArgError,                                            \
-                     "redrat_ext: compared value must be a PythonValue");     \
-                                                                              \
-        Data_Get_Struct(self, PyObject, pSelf);                               \
-        Data_Get_Struct(other, PyObject, pOther);                             \
-                                                                              \
-        gstate = PyGILState_Ensure();                                         \
-                                                                              \
-        switch (PyObject_RichCompareBool(pSelf, pOther, Py_##OP))             \
-        {                                                                     \
-            case -1:                                                          \
-                rExc = redrat_exception_convert();                            \
-                if (rExc != Qnil)                                             \
-                {                                                             \
-                    /*                                                        \
-                     * PyErr_Clear normally handled by the                    \
-                     * REDRAT_ERRJMP_PYEXC macro                              \
-                     */                                                       \
-                    PyErr_Clear();                                            \
-                    goto py_rb_error;                                         \
-                }                                                             \
-                else                                                          \
-                {                                                             \
-                    Assert(false);                                            \
-                                                                              \
-                    /* Quiet compiler */                                      \
-                    rTruth = Qnil;                                            \
-                }                                                             \
-            case 0:                                                           \
-                rTruth = Qfalse;                                              \
-                break;                                                        \
-            case 1:                                                           \
-                rTruth = Qtrue;                                               \
-                break;                                                        \
-            default:                                                          \
-                Assert(false);                                                \
-                                                                              \
-                /* Quiet compiler */                                          \
-                rTruth = Qnil;                                                \
-        }                                                                     \
-                                                                              \
-        PyGILState_Release(gstate);                                           \
-                                                                              \
-        return rTruth;                                                        \
-                                                                              \
-    py_rb_error:                                                              \
-        PyGILState_Release(gstate);                                           \
-                                                                              \
-        if (rExc != Qnil)                                                     \
-            redrat_rb_exc_raise(rExc, "redrat_ext: error during comparison"); \
-                                                                              \
-        Assert(false);                                                        \
-        rb_fatal("redrat_ext: botched exception handling in comparison");     \
-    }
-
-redrat_compare_generate(LT);
-redrat_compare_generate(LE);
-redrat_compare_generate(EQ);
-redrat_compare_generate(NE);
-redrat_compare_generate(GT);
-redrat_compare_generate(GE);
-
 void
 Init_redrat_ext()
 {
@@ -671,27 +636,14 @@ Init_redrat_ext()
     rb_define_module_function(rb_mRedRat, "apply", redrat_apply, -1);
     rb_define_module_function(rb_mRedRat, "unicode", redrat_unicode, 1);
     rb_define_module_function(rb_mRedRat, "getattr", redrat_getattr, 2);
+    rb_define_module_function(rb_mRedRat, "truth", redrat_truth, 1);
 
     /* Generated, see redrat_stringify_generate */
     rb_define_module_function(rb_mRedRat, "repr", redrat_repr, 1);
     rb_define_module_function(rb_mRedRat, "str", redrat_str, 1);
 
-    rb_cPythonValue = rb_define_class_under(
-        rb_mRedRat, "PythonValue", rb_cObject);
-
-    /* Comparison operator definitions, generated by redrat_compare_generate */
-    rb_define_method(rb_cPythonValue, "<",
-                     redrat_ruby_python_LT, 1);
-    rb_define_method(rb_cPythonValue, "<=",
-                     redrat_ruby_python_LE, 1);
-    rb_define_method(rb_cPythonValue, "==",
-                     redrat_ruby_python_EQ, 1);
-    rb_define_method(rb_cPythonValue, "!=",
-                     redrat_ruby_python_NE, 1);
-    rb_define_method(rb_cPythonValue, ">",
-                     redrat_ruby_python_GT, 1);
-    rb_define_method(rb_cPythonValue, ">=",
-                     redrat_ruby_python_GE, 1);
+    rb_cPythonValue = rb_define_class_under(rb_mRedRat,
+                                            "PythonValue", rb_cObject);
 
     /*
      * The RedRatException type, which wraps (optionally) a RedRat reason for

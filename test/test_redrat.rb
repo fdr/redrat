@@ -74,32 +74,40 @@ class TestRedrat < Test::Unit::TestCase
 
   def test_truth
     int_parse_function = get_builtin('int')
+    import = get_builtin '__import__'
+    operator = RedRat::apply(import, RedRat::unicode('operator'))
+
+    ops = {}
+    [:lt, :le, :eq, :ne, :gt, :ge].each { |sym|
+      ops[sym] = RedRat::getattr(operator, sym)
+    }
+
     pv_42 = RedRat::apply(int_parse_function, RedRat::unicode('42'))
     pv_32 = RedRat::apply(int_parse_function, RedRat::unicode('32'))
 
-    if pv_42 < pv_32
+    if RedRat::truth(RedRat::apply(ops[:lt], pv_42, pv_32))
       raise
     end
 
-    if pv_42 <= pv_32
+    if RedRat::truth(RedRat::apply(ops[:le], pv_42, pv_32))
       raise
     end
 
-    if pv_42 == pv_32
+    if RedRat::truth(RedRat::apply(ops[:eq], pv_42, pv_32))
       raise
     end
 
-    if pv_42 != pv_32
+    if RedRat::truth(RedRat::apply(ops[:ne], pv_42, pv_32))
     else
       raise
     end
 
-    if pv_42 > pv_32
+    if RedRat::truth(RedRat::apply(ops[:gt], pv_42, pv_32))
     else
       raise
     end
 
-    if pv_42 >= pv_32
+    if RedRat::truth(RedRat::apply(ops[:ge], pv_42, pv_32))
     else
       raise
     end
