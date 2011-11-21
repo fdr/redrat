@@ -489,7 +489,7 @@ redrat_unicode(VALUE self, VALUE rVal)
 
         return rRetVal;
 
-py_rb_error:
+    py_rb_error:
         /*
          * This is the only error path, so this should never be non-NULL, yet
          * do the normal XDECREF handling for idiom's sake.
