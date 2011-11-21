@@ -73,10 +73,10 @@ static VALUE redrat_ruby_handoff(PyObject *gced_by_ruby);
 static VALUE redrat_exception_convert();
 static PyObject *redrat_ruby_string_to_python(VALUE rStr);
 static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
-static VALUE redrat_ruby_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol);
+static VALUE redrat_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol);
 static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
-static VALUE redrat_python_unicode(VALUE self, VALUE rVal);
+static VALUE redrat_unicode(VALUE self, VALUE rVal);
 static VALUE redrat_python_exception_getter(VALUE self);
 
 /*
@@ -231,10 +231,10 @@ redrat_ruby_symbol_to_python_string(VALUE rSym)
  */
 
 /*
- * redrat_ruby_getattr - Get attributes from to Python by Ruby Symbol
+ * redrat_getattr - Get attributes from to Python by Ruby Symbol
  */
 static VALUE
-redrat_ruby_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol)
+redrat_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol)
 {
     PyGILState_STATE    gstate;
 
@@ -469,7 +469,7 @@ py_rb_error:
 }
 
 static VALUE
-redrat_python_unicode(VALUE self, VALUE rVal)
+redrat_unicode(VALUE self, VALUE rVal)
 {
     if (TYPE(rVal) == T_STRING)
     {
@@ -669,8 +669,8 @@ Init_redrat_ext()
     rb_define_module_function(rb_mRedRat, "builtins",
                               redrat_builtin_mapping, 0);
     rb_define_module_function(rb_mRedRat, "apply", redrat_apply, -1);
-    rb_define_module_function(rb_mRedRat, "unicode", redrat_python_unicode, 1);
-    rb_define_module_function(rb_mRedRat, "getattr", redrat_ruby_getattr, 2);
+    rb_define_module_function(rb_mRedRat, "unicode", redrat_unicode, 1);
+    rb_define_module_function(rb_mRedRat, "getattr", redrat_getattr, 2);
 
     /* Generated, see redrat_stringify_generate */
     rb_define_module_function(rb_mRedRat, "repr", redrat_repr, 1);
