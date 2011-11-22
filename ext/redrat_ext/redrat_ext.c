@@ -95,12 +95,6 @@ static VALUE rb_cPythonValue;
 /* The RedRat::RedRatException class */
 static VALUE rb_eRedRatException;
 
-/* The Python Type that delegates to Ruby Values */
-static PyTypeObject *pRubyValueType;
-
-/* The Python Type that delegates to Ruby Values */
-static PyTypeObject *pRubyExceptionType;
-
 /*
  * INTERNAL PROCEDURE DEFINITIONS
  *
