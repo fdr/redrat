@@ -4,7 +4,9 @@ require "redrat"
 class TestRedrat < Test::Unit::TestCase
   def get_builtin name
     RedRat::Internal::apply(
-      RedRat::Internal::getattr(RedRat::Internal::builtins, :__getitem__),
+      RedRat::Internal::getattr(
+        RedRat::Internal::builtins,
+        RedRat::Internal::unicode('__getitem__')),
       RedRat::Internal::unicode(name))
   end
 
@@ -80,7 +82,8 @@ class TestRedrat < Test::Unit::TestCase
 
     ops = {}
     [:lt, :le, :eq, :ne, :gt, :ge].each { |sym|
-      ops[sym] = RedRat::Internal::getattr(operator, sym)
+      ops[sym] = RedRat::Internal::getattr(
+        operator, RedRat::Internal::unicode(sym.to_s))
     }
 
     pv_42 = RedRat::Internal::apply(

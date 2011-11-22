@@ -17,18 +17,17 @@ Ruby and Python speak C.
 == SYNOPSIS:
 
    require 'redrat'
+   include RedRat::Internal
 
    def get_builtin name
-     RedRat::apply(
-       RedRat::getattr(RedRat::builtins, :__getitem__),
-       RedRat::unicode(name))
+     apply(getattr(builtins, unicode('__getitem__')), unicode(name))
    end
 
    # Only comes with Python in version 2.7
    import = get_builtin '__import__'
-   argparse = RedRat::apply(import, RedRat::unicode('argparse'))
-   ArgumentParser = RedRat::getattr(argparse, :ArgumentParser)
-   RedRat::apply(get_builtin('help'), ArgumentParser)
+   argparse = apply(import, RedRat::Internal::unicode('argparse'))
+   ArgumentParser = getattr(argparse, unicode('ArgumentParser'))
+   apply(get_builtin('help'), ArgumentParser)
 
 == REQUIREMENTS:
 

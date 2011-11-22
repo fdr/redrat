@@ -58,7 +58,7 @@ static VALUE redrat_ruby_handoff(PyObject *gced_by_ruby);
 static VALUE redrat_exception_convert();
 static PyObject *redrat_ruby_string_to_python(VALUE rStr);
 static PyObject *redrat_ruby_symbol_to_python_string(VALUE rSym);
-static VALUE redrat_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol);
+static VALUE redrat_getattr(VALUE self, VALUE rTarget, VALUE rPyString);
 static VALUE redrat_builtin_mapping(VALUE self);
 static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
 static VALUE redrat_truth(VALUE self, VALUE rVal);
@@ -214,66 +214,46 @@ redrat_ruby_symbol_to_python_string(VALUE rSym)
  */
 
 /*
- * redrat_getattr - Get attributes from to Python by Ruby Symbol
+ * redrat_getattr - Get attributes from a PythonValue via a PythonValue
+ *
+ * Nominally the second argument will be constructed via the 'unicode' method
+ * provided in this module.
  */
 static VALUE
-redrat_getattr(VALUE self, VALUE rTarget, VALUE rAttrSymbol)
+redrat_getattr(VALUE self, VALUE rTarget, VALUE rPyString)
 {
     PyGILState_STATE    gstate;
 
-    VALUE       rExcFromStringCoercion = Qnil;
-    VALUE       rExcFromDelegation     = Qnil;
-    VALUE       rSym;
+    PyObject *pTarget;
+    PyObject *pAttrName;
+    PyObject *pResult = NULL;
 
-    PyObject *pAttrName = NULL;
-    PyObject *pTarget   = NULL;
-    PyObject *pResult   = NULL;
+    VALUE rExcFromDelegation;
+    VALUE rResult;
 
-    VALUE       rResult;
-
-    if (!REDRAT_PYTHONVALUE_P(rTarget))
+    if (!(REDRAT_PYTHONVALUE_P(rTarget) && REDRAT_PYTHONVALUE_P(rPyString)))
         rb_raise(rb_eArgError,
-                 "redrat_ext: Only PythonValues support getattr");
-
-    if (!SYMBOL_P(rAttrSymbol))
-        rb_raise(rb_eArgError,
-                 "redrat_ext: only symbols can be delegated to Python");
+                 "redrat_ext: getattr only supports PythonValues");
 
     gstate = PyGILState_Ensure();
 
-
-    Assert(SYMBOL_P(rAttrSymbol));
-    pAttrName = redrat_ruby_symbol_to_python_string(rAttrSymbol);
-    REDRAT_ERRJMP_PYEXC(rExcFromStringCoercion, pAttrName);
-
-    Assert(REDRAT_PYTHONVALUE_P(rTarget));
     Data_Get_Struct(rTarget, PyObject, pTarget);
-    Py_INCREF(pTarget);
+    Data_Get_Struct(rPyString, PyObject, pAttrName);
 
     pResult = PyObject_GenericGetAttr(pTarget, pAttrName);
     REDRAT_ERRJMP_PYEXC(rExcFromDelegation, pResult);
-
     rResult = redrat_ruby_handoff(pResult);
-    Py_DECREF(pTarget);
 
     PyGILState_Release(gstate);
 
     return rResult;
 
 py_rb_error:
-    Py_XDECREF(pAttrName);
-    Py_XDECREF(pTarget);
-    Py_XDECREF(pResult);
-
     PyGILState_Release(gstate);
 
     if (rExcFromDelegation != Qnil)
         redrat_rb_exc_raise(rExcFromDelegation,
                             "redrat_ext: Could not delegate to Python");
-    else if (rExcFromStringCoercion != Qnil)
-        redrat_rb_exc_raise(rExcFromStringCoercion,
-                            "redrat_ext: Could not convert Ruby symbol "
-                            "for delegation to Python");
 
     Assert(false);
 }
