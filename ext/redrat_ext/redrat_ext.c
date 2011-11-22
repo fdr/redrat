@@ -89,6 +89,9 @@ static VALUE redrat_python_exception_getter(VALUE self);
 /* The RedRat Module */
 static VALUE rb_mRedRat;
 
+/* The RedRat::Internal Module */
+static VALUE rb_mRedRatInternal;
+
 /* The RedRat::PythonValue class */
 static VALUE rb_cPythonValue;
 
@@ -624,19 +627,22 @@ void
 Init_redrat_ext()
 {
     rb_mRedRat = rb_define_module("RedRat");
+    rb_mRedRatInternal = rb_define_module_under(rb_mRedRat, "Internal");
 
-    rb_define_module_function(rb_mRedRat, "builtins",
+    rb_define_module_function(rb_mRedRatInternal, "builtins",
                               redrat_builtin_mapping, 0);
-    rb_define_module_function(rb_mRedRat, "apply", redrat_apply, -1);
-    rb_define_module_function(rb_mRedRat, "unicode", redrat_unicode, 1);
-    rb_define_module_function(rb_mRedRat, "getattr", redrat_getattr, 2);
-    rb_define_module_function(rb_mRedRat, "truth", redrat_truth, 1);
+    rb_define_module_function(rb_mRedRatInternal, "apply", redrat_apply, -1);
+    rb_define_module_function(
+        rb_mRedRatInternal, "unicode", redrat_unicode, 1);
+    rb_define_module_function(
+        rb_mRedRatInternal, "getattr", redrat_getattr, 2);
+    rb_define_module_function(rb_mRedRatInternal, "truth", redrat_truth, 1);
 
     /* Generated, see redrat_stringify_generate */
-    rb_define_module_function(rb_mRedRat, "repr", redrat_repr, 1);
-    rb_define_module_function(rb_mRedRat, "str", redrat_str, 1);
+    rb_define_module_function(rb_mRedRatInternal, "repr", redrat_repr, 1);
+    rb_define_module_function(rb_mRedRatInternal, "str", redrat_str, 1);
 
-    rb_cPythonValue = rb_define_class_under(rb_mRedRat,
+    rb_cPythonValue = rb_define_class_under(rb_mRedRatInternal,
                                             "PythonValue", rb_cObject);
 
     /*
@@ -644,7 +650,8 @@ Init_redrat_ext()
      * the exception as well as the underlying python_exception, which can be
      * inspected as a normal PythonValue would.
      */
-    rb_eRedRatException = rb_define_class_under(rb_mRedRat, "RedRatException",
+    rb_eRedRatException = rb_define_class_under(rb_mRedRatInternal,
+                                                "RedRatException",
                                                 rb_eStandardError);
     rb_define_attr(rb_eRedRatException, "redrat_reason", 1, 0);
     rb_define_method(rb_eRedRatException, "python_exception",
