@@ -165,15 +165,11 @@ redrat_exception_convert()
     if (pExc != NULL)
     {
         VALUE rExc;
+        VALUE rWrappedPythonException;
 
-        /*
-         * Similar to redrat_ruby_handoff, except inheriting from the Exception
-         * hierarchy.
-         */
-        Py_INCREF(pExc);
-        rExc = Data_Wrap_Struct(rb_eRedRatException, NULL,
-                                redrat_py_decref_wrap, pExc);
-
+        rExc = rb_exc_new2(rb_eRedRatException, "RedRat exception");
+        rWrappedPythonException = redrat_ruby_handoff(pExc);
+        rb_iv_set(rExc, "@python_exception", rWrappedPythonException);
         PyErr_Clear();
         return rExc;
     }
