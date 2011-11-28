@@ -76,14 +76,14 @@ static VALUE redrat_python_exception_getter(VALUE self);
  * TODO: Right now sub-interpreters for Python are not supported.  That
  * limitation should be lifted, which will mean creating a new Object in Ruby
  * that calls the Py_NewInterpreter() function (let's call it
- * RedRat::PythonInterpreter), and holds a reference to the subinterpreter, and
- * each one of those should possess references to their Python-loaded RubyValue
- * and RubyException types.  It also means globally accessed builtins like
- * apply, repr, and str latch onto an interpreter state instead singletons of
- * the Module, as they do now.  Py_EndInterpreter will need to be called upon
- * the garbage collection of a PythonInterpreter instance, and
- * PyThreadState_Swap will need to be called when messages on those
- * PythonInterpreter instances are accessed.
+ * RedRat::Internal::PythonInterpreter), and holds a reference to the
+ * subinterpreter, and each one of those should possess references to their
+ * Python-loaded RubyValue and RubyException types.  It also means globally
+ * accessed builtins like apply, repr, and str latch onto an interpreter state
+ * instead singletons of the Module, as they do now.  Py_EndInterpreter will
+ * need to be called upon the garbage collection of a PythonInterpreter
+ * instance, and PyThreadState_Swap will need to be called when messages on
+ * those PythonInterpreter instances are accessed.
  */
 
 /* The RedRat Module */
@@ -92,10 +92,10 @@ static VALUE rb_mRedRat;
 /* The RedRat::Internal Module */
 static VALUE rb_mRedRatInternal;
 
-/* The RedRat::PythonValue class */
+/* The RedRat::Internal::PythonValue class */
 static VALUE rb_cPythonValue;
 
-/* The RedRat::RedRatException class */
+/* The RedRat::Internal::RedRatException class */
 static VALUE rb_eRedRatException;
 
 /*
