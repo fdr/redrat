@@ -53,8 +53,10 @@ class TestRedrat < Test::Unit::TestCase
     begin
       get_builtin 'really doesn\'t exist'
     rescue RedRat::Internal::RedRatException => e
-      e.python_exception
       e.redrat_reason
+      e.python_type
+      e.python_value
+      e.python_traceback
     end
   end
 

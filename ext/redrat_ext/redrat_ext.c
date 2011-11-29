@@ -160,22 +160,44 @@ redrat_rb_exc_raise(VALUE rExc, const char *reason)
 static VALUE
 redrat_exception_convert()
 {
-    PyObject *pExc = PyErr_Occurred();
+    PyObject *pType;
+    PyObject *pValue;
+    PyObject *pTraceback;
 
-    if (pExc != NULL)
+    PyErr_Fetch(&pType, &pValue, &pTraceback);
+
+    if (pType != NULL)
     {
-        VALUE rExc;
-        VALUE rWrappedPythonException;
+        VALUE rException;
 
-        rExc = rb_exc_new2(rb_eRedRatException, "RedRat exception");
-        rWrappedPythonException = redrat_ruby_handoff(pExc);
-        rb_iv_set(rExc, "@python_exception", rWrappedPythonException);
+        /* The trinity of Python exception information, see PyErr_Fetch */
+        VALUE rpType;
+        VALUE rpValue = Qnil;
+        VALUE rpTraceback = Qnil;
+
+        rpType = redrat_ruby_handoff(pType);
+
+        if (pValue != NULL)
+            rpValue = redrat_ruby_handoff(pValue);
+
+        if (pTraceback != NULL)
+            rpTraceback = redrat_ruby_handoff(pTraceback);
+
+        rException = rb_exc_new2(rb_eRedRatException, "RedRat exception");
+        rb_iv_set(rException, "@python_type", rpType);
+        rb_iv_set(rException, "@python_value", rpValue);
+        rb_iv_set(rException, "@python_traceback", rpTraceback);
+
+        Py_DECREF(pType);
+        Py_XDECREF(pValue);
+        Py_XDECREF(pTraceback);
+
         PyErr_Clear();
-        return rExc;
+        return rException;
     }
     else
     {
-        Assert(pExc == NULL);
+        Assert(pValue == NULL);
 
         rb_bug("redrat_ext: expected Python error state, "
                "but no error state was found");
@@ -536,30 +558,6 @@ redrat_unicode(VALUE self, VALUE rVal)
                  "constructing Python Unicode");
 }
 
-static VALUE
-redrat_python_exception_getter(VALUE self)
-{
-    PyGILState_STATE  gstate;
-
-    PyObject         *pExc;
-    VALUE             retval;
-
-    /*
-     * XXX: Should probably avoid re-handing-off new PythonValues to Ruby all
-     * the time.  That probably means understanding the mechanism behind class
-     * dispatch really well, which probably means reading Ruby source code and
-     * doing some educated guesswork.  LOL.
-     */
-    Data_Get_Struct(self, PyObject, pExc);
-
-    gstate = PyGILState_Ensure();
-
-    retval = redrat_ruby_handoff(pExc);
-
-    PyGILState_Release(gstate);
-    return retval;
-}
-
 #define redrat_stringify_generate(lowcase, upcase)                            \
     static VALUE                                                              \
     redrat_##lowcase(VALUE self, VALUE rPythonValue)                          \
@@ -630,8 +628,9 @@ Init_redrat_ext()
                                                 "RedRatException",
                                                 rb_eStandardError);
     rb_define_attr(rb_eRedRatException, "redrat_reason", 1, 0);
-    rb_define_method(rb_eRedRatException, "python_exception",
-                     redrat_python_exception_getter, 0);
+    rb_define_attr(rb_eRedRatException, "python_type", 1, 1);
+    rb_define_attr(rb_eRedRatException, "python_value", 1, 1);
+    rb_define_attr(rb_eRedRatException, "python_traceback", 1, 1);
 
     Py_Initialize();
 }
