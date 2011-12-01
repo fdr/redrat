@@ -245,10 +245,17 @@ module RedRat::MetaObject
         args.each { |a| pyargs.append(a) }
         kwargs = KwArgs.new(RedRat::Internal::apply(shortcuts.dict))
 
-        # XXX: Expectated to mutate the passed kwargs; perhaps a wart,
-        # but otherwise blocks look like:
+        # XXX: block.call here is expectated to mutate the passed
+        # kwargs; perhaps a wart, but otherwise blocks would have to
+        # look like:
         #
-        # { |kw| kw[:foo] = 'bar'; ...; kw }
+        # { |kw| kw[:foo] = 'bar'; kw }
+        #
+        # Note the ugly trailing 'kw'.  We eliminate this by throwing
+        # away the block return value and relying on side effects, so
+        # blocks can look like:
+        #
+        # { |kw| kw[:foo] = 'bar' }
         #
         # Ideally, one could return a Ruby hash and, without
         # copying/marshalling, refer to that hash directly in
