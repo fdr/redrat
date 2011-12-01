@@ -4,8 +4,11 @@ module RedRat::MetaObject
 
     attr_reader :get_builtin, :pyapply, :import, :issubclass,
                 :setattr, :type, :dict, :list, :py_exceptions_module,
-                :py_operator_module, :py_inspect_module, :py_eq_proto,
-                :attribute_error, :getitem, :setitem
+                :py_operator_module, :py_inspect_module,
+                :attribute_error, :getitem, :setitem, :eq, :pow,
+                :invert, :add, :sub, :pos, :neg, :mul, :div, :mod,
+                :rshift, :lshift, :and_, :xor, :or_, :le, :lt, :gt,
+                :ge, :cmp, :contains
 
     def initialize
       # A horde of convenience variables that unbox useful Python
@@ -30,12 +33,6 @@ module RedRat::MetaObject
       # setattr
       @setattr = apply(@get_builtin, unicode('setattr'))
 
-      # type
-      @type = apply(@get_builtin, unicode('type'))
-
-      # tuple
-      @tuple = apply(@get_builtin, unicode('tuple'))
-
       # dict
       @dict = apply(@get_builtin, unicode('dict'))
 
@@ -48,12 +45,6 @@ module RedRat::MetaObject
       # import operator
       @py_operator_module = apply(@import, unicode('operator'))
 
-      # import inspect
-      @py_inspect_module = apply(@import, unicode('inspect'))
-
-      # x == y
-      @py_eq_proto = getattr(@py_operator_module, unicode('eq'))
-
       # exceptions.AttributeError
       @attribute_error = getattr(@py_exceptions_module,
         unicode('AttributeError'))
@@ -63,6 +54,32 @@ module RedRat::MetaObject
 
       # operator.setitem
       @setitem = getattr(@py_operator_module, unicode('setitem'))
+
+      # A pile of operators to handle the analogous operators with
+      # special precedence rules in Ruby, such those associated with
+      # arithmetic operators.
+      # x == y
+      @pow = getattr(@py_operator_module, unicode('pow'))
+      @invert = getattr(@py_operator_module, unicode('invert'))
+      @add = getattr(@py_operator_module, unicode('add'))
+      @sub = getattr(@py_operator_module, unicode('sub'))
+      @pos = getattr(@py_operator_module, unicode('pos'))
+      @neg = getattr(@py_operator_module, unicode('neg'))
+      @mul = getattr(@py_operator_module, unicode('mul'))
+      @div = getattr(@py_operator_module, unicode('div'))
+      @mod = getattr(@py_operator_module, unicode('mod'))
+      @rshift = getattr(@py_operator_module, unicode('rshift'))
+      @lshift = getattr(@py_operator_module, unicode('lshift'))
+      @and_ = getattr(@py_operator_module, unicode('and_'))
+      @xor = getattr(@py_operator_module, unicode('xor'))
+      @or_ = getattr(@py_operator_module, unicode('or_'))
+      @le = getattr(@py_operator_module, unicode('le'))
+      @lt = getattr(@py_operator_module, unicode('lt'))
+      @gt = getattr(@py_operator_module, unicode('gt'))
+      @ge = getattr(@py_operator_module, unicode('ge'))
+      @cmp = apply(@get_builtin, unicode('cmp'))
+      @eq = getattr(@py_operator_module, unicode('eq'))
+      @contains = getattr(@py_operator_module, unicode('contains'))
     end
   end
 
@@ -92,7 +109,7 @@ module RedRat::MetaObject
     end
 
     def != other
-      !truth(apply(@sc.py_eq_proto, @python_value,  other))
+      !truth(apply(@sc.eq, @python_value,  other))
     end
 
     def __getobj__
@@ -115,34 +132,77 @@ module RedRat::MetaObject
         self.class.propagate_delegation {
           case m
           when :[]=
-            self.class.maybe_raise_argerror_number_of_arguments(args.length, 2)
             apply(@sc.setitem, @python_value, *unboxed)
           when :[]
-            self.class.maybe_raise_argerror_number_of_arguments(args.length, 1)
-            apply(@sc.getitem, @python_value, unboxed[0])
-          when m[-1] == '='
-            # Asserts this is not a subscript-assignment, which is a
-            # special assignment kind that must be taken care of in
-            # other code prior to this that prohibits getting here.
-            self.class.assert { m != :[]= }
-            if args.length != 1
-              raise ArgumentError.new(
-                "ArgumentError: wrong number of " +
-                "arguments(#{args.length} for 1)")
-            end
-
-            apply(@python_value, unicode(m[0..-2]), unboxed[0])
+            apply(@sc.getitem, @python_value, *unboxed)
+          when :**
+            apply(@sc.pow, @python_value, *unboxed)
+          when :~
+            apply(@sc.invert, @python_value, *unboxed)
+          when :+
+            apply(@sc.add, @python_value, *unboxed)
+          when :-
+            apply(@sc.sub, @python_value, *unboxed)
+          when :+@
+            apply(@sc.pos, @python_value, *unboxed)
+          when :-@
+            apply(@sc.neg, @python_value, *unboxed)
+          when :*
+            apply(@sc.mul, @python_value, *unboxed)
+          when :/
+            apply(@sc.div, @python_value, *unboxed)
+          when :%
+            apply(@sc.mod, @python_value, *unboxed)
+          when :>>
+            apply(@sc.rshift, @python_value, *unboxed)
+          when :<<
+            apply(@sc.lshift, @python_value, *unboxed)
+          when :&
+            apply(@sc.and_, @python_value, *unboxed)
+          when :^
+            apply(@sc.xor, @python_value, *unboxed)
+          when :|
+            apply(@sc.or_, @python_value, *unboxed)
+          when :<=
+            apply(@sc.le, @python_value, *unboxed)
+          when :<
+            apply(@sc.lt, @python_value, *unboxed)
+          when :>
+            apply(@sc.gt, @python_value, *unboxed)
+          when :>=
+            apply(@sc.ge, @python_value, *unboxed)
+          when :<=>
+            apply(@sc.cmp, @python_value, *unboxed)
+          when :==
+            apply(@sc.eq, @python_value, *unboxed)
+          when :===
+            apply(@sc.contains, @python_value, *unboxed)
           else
-            # "Normal" attribute references and calling
-            attr = getattr(@python_value, unicode(m.to_s))
+            if m[-1] == '='
+              # Asserts this is not a subscript-assignment, which is a
+              # special assignment kind that must be taken care of in
+              # other code prior to this that prohibits getting here.
+              self.class.assert { m != :[]= }
+              if args.length != 1
+                raise ArgumentError.new(
+                  "ArgumentError: wrong number of " +
+                  "arguments(#{args.length} for 1)")
+              end
 
-            if args.length > 0
-              self.class.uninfectious_call(@sc, attr, *args, &block)
+              apply(@sc.setattr, @python_value, unicode(m[0..-2]), unboxed[0])
             else
-              # Attribute reference (getattr, without calling it)
-              # case, where no arguments are passed.
-              self.class.assert { args.length == 0 }
-              getattr(@python_value, unicode(m.to_s))
+
+              # "Normal" attribute references and calling
+              attr = getattr(@python_value, unicode(m.to_s))
+
+              if args.length > 0
+                self.class.uninfectious_call(@sc, attr, *args, &block)
+              else
+                # Attribute reference (getattr, without calling it)
+                # case, where no arguments are passed.
+                self.class.assert { args.length == 0 }
+                getattr(@python_value, unicode(m.to_s))
+              end
             end
           end
         }
@@ -184,7 +244,7 @@ module RedRat::MetaObject
       str(@python_value)
     end
 
-    # Class functions.  These are placed on the Class, not instances,
+    # Class functions.  These are not placed on the delegate instance
     # as to avoid ambiguity between calling RedRat utility procedures
     # vs. delegating to Python.
 
@@ -192,14 +252,6 @@ module RedRat::MetaObject
       # TODO: Provide turning off assertions for production
       if !block.call
         raise "RedRat: Assertion Failure"
-      end
-    end
-
-    def self.maybe_raise_argerror_number_of_arguments(received, wanted)
-      if received != wanted
-        raise ArgumentError.new(
-          "ArgumentError: wrong number of " +
-          "arguments(#{received} for #{wanted})")
       end
     end
 
