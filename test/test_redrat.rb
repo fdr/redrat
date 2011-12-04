@@ -37,10 +37,14 @@ class TestRedrat < Test::Unit::TestCase
     end
   end
 
-  def test_must_reject_non_python_values_in_first_argument
+  def test_must_accept_ruby_objects
     begin
       RedRat::Internal::apply 'hello' '1', '2'
-    rescue ArgumentError
+    rescue RedRat::Internal::RedRatException => e
+      if (RedRat::Internal::str(e.python_value) !=
+          "'redrat.RubyObject' object is not callable")
+        raise
+      end
     end
   end
 

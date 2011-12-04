@@ -52,7 +52,7 @@
 redrat_stringify_generate_prototype(repr);
 redrat_stringify_generate_prototype(str);
 
-/* Internal function definitions */
+/* Internal Ruby procedure definitions */
 static void redrat_py_decref_wrap(PyObject *freeing);
 static VALUE redrat_ruby_handoff(PyObject *gced_by_ruby);
 static VALUE redrat_exception_convert();
@@ -64,6 +64,51 @@ static VALUE redrat_apply(int argc, VALUE *argv, VALUE self);
 static VALUE redrat_truth(VALUE self, VALUE rVal);
 static VALUE redrat_unicode(VALUE self, VALUE rVal);
 static VALUE redrat_python_exception_getter(VALUE self);
+
+
+/* Python definitions */
+
+/* A redrat-supplied RubyObject as represented in Python */
+typedef struct {
+    PyObject_HEAD
+    VALUE r;
+} redrat_RubyObject;
+
+/* Python procedure prototypes */
+#ifndef PyMODINIT_FUNC
+#define PyMODINIT_FUNC void
+#endif
+
+PyMODINIT_FUNC initredrat(void);
+
+static void redrat_rubyobject_dealloc(redrat_RubyObject *self);
+static PyObject *redrat_python_handoff(VALUE r);
+
+/* The type instance for RubyObjects in Python */
+static PyTypeObject redrat_RubyType = {
+    PyObject_HEAD_INIT(NULL)
+    0,                         /*ob_size*/
+    "redrat.RubyObject",       /*tp_name*/
+    sizeof(redrat_RubyObject), /*tp_basicsize*/
+    0,                         /*tp_itemsize*/
+    (destructor)redrat_rubyobject_dealloc, /*tp_dealloc*/
+    0,                         /*tp_print*/
+    0,                         /*tp_getattr*/
+    0,                         /*tp_setattr*/
+    0,                         /*tp_compare*/
+    0,                         /*tp_repr*/
+    0,                         /*tp_as_number*/
+    0,                         /*tp_as_sequence*/
+    0,                         /*tp_as_mapping*/
+    0,                         /*tp_hash */
+    0,                         /*tp_call*/
+    0,                         /*tp_str*/
+    0,                         /*tp_getattro*/
+    0,                         /*tp_setattro*/
+    0,                         /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+    "redrat Ruby objects",     /* tp_doc */
+};
 
 /*
  * GLOBAL STATE
@@ -122,6 +167,9 @@ redrat_py_decref_wrap(PyObject *freeing)
 /*
  * redrat_ruby_handoff - Hands off a PyObject to Ruby
  *
+ * If this PyObject is of type redrat.RubyObject, then just return the
+ * unwrapped Ruby object inside.
+ *
  * This procedure presumes that the Python GIL is already held.
  *
  * This includes the hybridization of Ruby and Python GC.  To do this, Ruby
@@ -131,13 +179,18 @@ redrat_py_decref_wrap(PyObject *freeing)
  * GCed it yet.
  */
 static VALUE
-redrat_ruby_handoff(PyObject *gced_by_ruby)
+redrat_ruby_handoff(PyObject *handing_off)
 {
-    Py_INCREF(gced_by_ruby);
+    if (handing_off->ob_type == &redrat_RubyType)
+        return ((redrat_RubyObject *) handing_off)->r;
+    else
+    {
+        Py_INCREF(handing_off);
 
-    return Data_Wrap_Struct(rb_cPythonValue,
-                            NULL, redrat_py_decref_wrap,
-                            gced_by_ruby);
+        return Data_Wrap_Struct(rb_cPythonValue,
+                                NULL, redrat_py_decref_wrap,
+                                handing_off);
+    }
 }
 
 static void
@@ -377,13 +430,14 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
         rb_raise(rb_eArgError,
                  "redrat_ext: apply does not accept a block");
 
-    /* Reject apply(NOT_A_PYTHONVALUE, ...) */
-    if (!REDRAT_PYTHONVALUE_P(argv[0]))
-        rb_raise(rb_eArgError,
-                 "redrat_ext: apply must apply a PythonValue to zero or "
-                 "more arguments");
-
-    Data_Get_Struct(argv[0], PyObject, pMaybeCallable);
+    /*
+     * Handle unwrapping a PythonValue, if passed, or wrapping up a new
+     * RubyObject in Python.
+     */
+    if (REDRAT_PYTHONVALUE_P(argv[0]))
+        Data_Get_Struct(argv[0], PyObject, pMaybeCallable);
+    else
+        pMaybeCallable = redrat_python_handoff(argv[0]);
 
     gstate = PyGILState_Ensure();
 
@@ -392,10 +446,6 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
     /*
      * Gin up an argument tuple for the function.  Because the first element of
      * argv is the function itself, initialize the capacity accordingly.
-     *
-     * It's still possible for a type error to occur, but at this point it is
-     * assumed that most calls are going to succeed, so start building the
-     * argument list greedily anyway.
      */
     pArgs = PyTuple_New(argc - 1);
 
@@ -409,24 +459,26 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
 
         if (TYPE(rCurrentArg) == T_DATA && REDRAT_PYTHONVALUE_P(rCurrentArg))
         {
+            /* Unpack a PythonValue in Ruby should it be presented */
             Data_Get_Struct(rCurrentArg, PyObject, pArg);
             Py_INCREF(pArg);
-            PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
         }
         else
-            rb_raise(rb_eArgError,
-                     "redrat_ext: Only PythonValues are supported in "
-                     "RedRat apply");
+        {
+            /* Take any Ruby Object and hand it off to Python */
+            pArg = redrat_python_handoff(rCurrentArg);
+        }
+
+        PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
     }
 
     pResult = PyObject_Call(pMaybeCallable, pArgs, NULL);
     REDRAT_ERRJMP_PYEXC(rExcApplication, pResult);
 
-    Py_DECREF(pMaybeCallable);
-    Py_DECREF(pArgs);
-
     rResult = redrat_ruby_handoff(pResult);
 
+    Py_DECREF(pMaybeCallable);
+    Py_DECREF(pArgs);
     Py_DECREF(pResult);
 
     PyGILState_Release(gstate);
@@ -633,4 +685,65 @@ Init_redrat_ext()
     rb_define_attr(rb_eRedRatException, "python_traceback", 1, 1);
 
     Py_Initialize();
+
+    /* Initialize the redrat module in Python */
+    initredrat();
+}
+
+
+/* Python Constructs */
+
+/*
+ * The inverse of PythonValue in RedRat for Ruby is RubyObject in Python.  This
+ * is useful so that one can write Ruby classes that can be sent into Python
+ * classes, or even send standard Ruby Hashes, Arrays, and Unicode directly to
+ * Python, without marshalling or copying, so long as they are taught the right
+ * operator conventions.
+ */
+
+static PyMethodDef rubyobject_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static void
+redrat_rubyobject_dealloc(redrat_RubyObject* self)
+{
+    /*
+     * Notify Ruby that this value is no longer required by Python.  Analogous
+     * to its Ruby inverse, redrat_py_decref_wrap.
+     */
+    rb_gc_unregister_address(&(self->r));
+    self->ob_type->tp_free((PyObject*)self);
+}
+
+static PyObject *
+redrat_python_handoff(VALUE r)
+{
+    redrat_RubyObject *pyr;
+
+    /*
+     * Notify Ruby that this value has a reference somewhere otherwise unknown
+     * to its mark-sweep collection pass, as so the value does not get GCed
+     * while Python has references still.
+     */
+    rb_gc_register_address(&r);
+    pyr = (redrat_RubyObject *) redrat_RubyType.tp_alloc(&redrat_RubyType, 0);
+    pyr->r = r;
+    return (PyObject *) pyr;
+}
+
+PyMODINIT_FUNC
+initredrat(void)
+{
+    PyObject *m;
+
+    redrat_RubyType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&redrat_RubyType) < 0)
+        return;
+
+    m = Py_InitModule3("redrat", rubyobject_methods,
+                       "Module that exposes Ruby Objects to Python.");
+
+    Py_INCREF(&redrat_RubyType);
+    PyModule_AddObject(m, "RubyObject", (PyObject *) &redrat_RubyType);
 }
