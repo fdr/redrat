@@ -130,7 +130,7 @@ module RedRat::MetaObject
     end
 
     def method_missing(m, *args, &block)
-      unboxed = args.map { |a| a.__getobj__ }
+      unboxed = self.class.optional_unwrap(*args)
 
       begin
         self.class.propagate_delegation {
@@ -260,13 +260,20 @@ module RedRat::MetaObject
     def self.propagate_delegation &block
       # Given a block, ensure that the return value *or* the
       # up-to-three yielded PythonValues in a RedRatException are
-      # convereted into Delegations of this type.  The goal is that
-      # all new PythonValues that result from any computation on the
-      # current object should be wrapped in the current type's
-      # delegator.
+      # converted into Delegations of this type, should they require
+      # conversion (RubyObjects returned from Python do not require
+      # conversion).  The goal is that all new PythonValues that
+      # result from any computation on the current object should be
+      # wrapped in the current type's delegator.
 
       begin
-        new(block.call)
+        val = block.call
+
+        if val.kind_of? RedRat::Internal::PythonValue
+          new(val)
+        else
+          val
+        end
       rescue RedRatException => e
         # Rewrite PythonValues in the Exception instance to be
         # delegate instances as the same kind as this delegate
@@ -275,13 +282,32 @@ module RedRat::MetaObject
           original = e.instance_variable_get(pvalsym)
 
           if !original.nil?
-            delegated_pval = new(original)
-            e.instance_variable_set(pvalsym, delegated_pval)
+            if original.kind_of? RedRat::Internal::PythonValue
+              val = new(original)
+            else
+              val = original
+            end
+
+            e.instance_variable_set(pvalsym, val)
           end
         }
 
         raise
       end
+    end
+
+    def self.optional_unwrap *args
+      # Attempt unwrapping a delegation to a PythonValue, but should
+      # that fail, pass the RubyObject directly.
+      args.map { |a|
+        # XXX: is_a? doesn't seem to properly detect KwArg child
+        # instances.  Eh?
+        if a.respond_to? :__getobj__
+          a.__getobj__
+        else
+          a
+        end
+      }
     end
 
     def self.uninfectious_call shortcuts, python_value, *args, &block
@@ -323,8 +349,7 @@ module RedRat::MetaObject
           shortcuts.pyapply, python_value, pyargs.__getobj__,
           kwargs.__getobj__)
       else
-        RedRat::Internal::apply(
-          python_value, *(args.map { |a| a.__getobj__ }))
+        RedRat::Internal::apply(python_value, *self.optional_unwrap(*args))
       end
     end
 
