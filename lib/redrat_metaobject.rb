@@ -125,6 +125,10 @@ module RedRat::MetaObject
       }
     end
 
+    def == other
+      apply(@sc.eq, @python_value, other.__getobj__)
+    end
+
     def method_missing(m, *args, &block)
       unboxed = args.map { |a| a.__getobj__ }
 
@@ -173,8 +177,6 @@ module RedRat::MetaObject
             apply(@sc.ge, @python_value, *unboxed)
           when :<=>
             apply(@sc.cmp, @python_value, *unboxed)
-          when :==
-            apply(@sc.eq, @python_value, *unboxed)
           when :===
             apply(@sc.contains, @python_value, *unboxed)
           else
