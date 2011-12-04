@@ -170,7 +170,7 @@ redrat_py_decref_wrap(PyObject *freeing)
  * If this PyObject is of type redrat.RubyObject, then just return the
  * unwrapped Ruby object inside.
  *
- * This procedure presumes that the Python GIL is already held.
+ * This procedure presumes that the Python GIL and Ruby GILs are already held.
  *
  * This includes the hybridization of Ruby and Python GC.  To do this, Ruby
  * will get its own reference (Py_INCREF) and registers a callback that exists
@@ -425,27 +425,16 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
         rb_raise(rb_eArgError,
                  "redrat_ext: apply must take at least one argument");
 
-    /* Reject blocks */
-    if (rb_block_given_p())
-        rb_raise(rb_eArgError,
-                 "redrat_ext: apply does not accept a block");
-
-    /*
-     * Handle unwrapping a PythonValue, if passed, or wrapping up a new
-     * RubyObject in Python.
-     */
-    if (REDRAT_PYTHONVALUE_P(argv[0]))
-        Data_Get_Struct(argv[0], PyObject, pMaybeCallable);
-    else
-        pMaybeCallable = redrat_python_handoff(argv[0]);
-
     gstate = PyGILState_Ensure();
 
+    pMaybeCallable = redrat_python_handoff(argv[0]);
     Py_INCREF(pMaybeCallable);
 
     /*
-     * Gin up an argument tuple for the function.  Because the first element of
-     * argv is the function itself, initialize the capacity accordingly.
+     * Gin up an argument tuple for the function.
+     *
+     * The first Ruby argument to this function is not counted towards this, so
+     * adjust the tuple size accordingly.
      */
     pArgs = PyTuple_New(argc - 1);
 
@@ -457,17 +446,7 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
 
         Assert(PyTuple_Size(pArgs) > tupleWritePosition);
 
-        if (TYPE(rCurrentArg) == T_DATA && REDRAT_PYTHONVALUE_P(rCurrentArg))
-        {
-            /* Unpack a PythonValue in Ruby should it be presented */
-            Data_Get_Struct(rCurrentArg, PyObject, pArg);
-            Py_INCREF(pArg);
-        }
-        else
-        {
-            /* Take any Ruby Object and hand it off to Python */
-            pArg = redrat_python_handoff(rCurrentArg);
-        }
+        pArg = redrat_python_handoff(rCurrentArg);
 
         PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
     }
@@ -716,20 +695,44 @@ redrat_rubyobject_dealloc(redrat_RubyObject* self)
     self->ob_type->tp_free((PyObject*)self);
 }
 
+/*
+ * redrat_python_handoff - Hands off a Ruby VALUE to Python
+ *
+ * If this PyObject is of type RubyObject, then just return the unwrapped Ruby
+ * object inside.
+ *
+ * This procedure presumes that the Python GIL and Ruby GILs are already held.
+ *
+ * This includes the hybridization of Ruby and Python GC.  To do this, Python
+ * will get its own global variable reference (via rb_gc_register_address) and
+ * in the destructor for a RubyObject the inverse, rb_gc_unregister_address
+ * must be called.
+ */
 static PyObject *
 redrat_python_handoff(VALUE r)
 {
-    redrat_RubyObject *pyr;
+    if (REDRAT_PYTHONVALUE_P(r))
+    {
+        PyObject *ret;
 
-    /*
-     * Notify Ruby that this value has a reference somewhere otherwise unknown
-     * to its mark-sweep collection pass, as so the value does not get GCed
-     * while Python has references still.
-     */
-    rb_gc_register_address(&r);
-    pyr = (redrat_RubyObject *) redrat_RubyType.tp_alloc(&redrat_RubyType, 0);
-    pyr->r = r;
-    return (PyObject *) pyr;
+        Data_Get_Struct(r, PyObject, ret);
+
+        return ret;
+    }
+    else
+    {
+        redrat_RubyObject *pyr;
+
+        /*
+         * Notify Ruby that this value has a reference somewhere otherwise
+         * unknown to its mark-sweep collection pass, as so the value does not
+         * get GCed while Python has references still.
+         */
+        rb_gc_register_address(&r);
+        pyr = (void *) redrat_RubyType.tp_alloc(&redrat_RubyType, 0);
+        pyr->r = r;
+        return (PyObject *) pyr;
+    }
 }
 
 PyMODINIT_FUNC

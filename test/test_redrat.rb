@@ -29,14 +29,6 @@ class TestRedrat < Test::Unit::TestCase
     end
   end
 
-  def test_must_reject_blocks
-    begin
-      RedRat::Internal::apply 'hello' do |blah|
-      end
-    rescue ArgumentError
-    end
-  end
-
   def test_must_accept_ruby_objects
     begin
       RedRat::Internal::apply 'hello' '1', '2'
