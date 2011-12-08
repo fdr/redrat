@@ -265,7 +265,7 @@ redrat_exception_convert()
 static PyObject *
 redrat_ruby_string_to_python(VALUE rStr)
 {
-    return PyUnicode_FromString(RSTRING_PTR(rStr));
+    return PyUnicode_FromFormat("%s", RSTRING_PTR(rStr));
 }
 
 /*
