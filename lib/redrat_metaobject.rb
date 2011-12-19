@@ -203,7 +203,8 @@ module RedRat::MetaObject
                 # Attribute reference (getattr, without calling it)
                 # case, where no arguments are passed.
                 self.class.assert { args.length == 0 }
-                getattr(@python_value, unicode(m.to_s))
+                python_unicode = unicode(m.to_s)
+                getattr(@python_value, python_unicode)
               end
             end
           end
@@ -344,6 +345,8 @@ module RedRat::MetaObject
         # delegated to from Ruby since that's working better at the
         # moment.
         block.call kwargs
+
+        puts [self.new(shortcuts.pyapply), self.new(python_value), pyargs, kwargs].inspect
 
         RedRat::Internal::apply(
           shortcuts.pyapply, python_value, pyargs.__getobj__,

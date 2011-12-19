@@ -44,10 +44,11 @@ def pe &block
     puts "Python Exception Type: " + e.python_type.to_s
     puts "Python Exception Value: " + e.python_value.to_s
     unless e.python_traceback.nil?
-      join_func = (u'\t\n').join
+      #join_func = (u'\t\n').join
       format_tb = traceback.format_tb
       tb_ary = format_tb.call(e.python_traceback)
-      s = "\n" + join_func.call(tb_ary).to_s
+      #s = "\n" + join_func.call(tb_ary).to_s
+      s = tb_ary.to_s
       puts "Python Traceback: " + s
     end
 
@@ -134,17 +135,27 @@ pe {
   import = builtins[u'__import__']
   sys = import.call(u'sys')
   exceptions = import.call(u'exceptions')
+
+  codecs = import.call u'codecs'
+
   argparse = import.call u'argparse'
   list = builtins[u'list']
 
   sys.argv = (list.call)
 
+  puts [$0, 'hi'].inspect
+  puts [ARGV, 'bye'].inspect
+
   argv = list.call
-  ARGV.each { |a| argv.append(U-a) }
+  ([$0] + ARGV).each { |a| argv.append(U-a) }
   sys.argv = argv
 
-  parser = (argparse.ArgumentParser).call { |kw|
+
+  parser = argparse.ArgumentParser.call { |kw|
+    puts kw
     kw[:description] = u'Play with Redrat.'
+    puts kw
+    #kw.__setitem__(U-'description', U-'play with redrat')j
   }
 
   parser.add_argument(u'--exceptions') { |kw|
@@ -200,7 +211,7 @@ pe {
     end
   rescue RedRat::Internal::RedRatException => e
     if e.python_type == exceptions.SystemExit
-      exit
+      #exit
     else
       raise
     end

@@ -1,6 +1,7 @@
 #include "redrat_ext.h"
 
 #define REDRAT_DEBUG 1
+#define REDRAT_NO_GC 1
 
 #ifdef REDRAT_DEBUG
 #define Assert(x)                                                             \
@@ -160,7 +161,9 @@ redrat_py_decref_wrap(PyObject *freeing)
 {
     PyGILState_STATE gstate = PyGILState_Ensure();
 
+#ifndef REDRAT_NO_GC
     Py_DECREF(freeing);
+#endif
     PyGILState_Release(gstate);
 }
 
@@ -265,7 +268,13 @@ redrat_exception_convert()
 static PyObject *
 redrat_ruby_string_to_python(VALUE rStr)
 {
-    return PyUnicode_FromFormat("%s", RSTRING_PTR(rStr));
+    char *stringval = (StringValueCStr(rStr));
+    char *copy = malloc(sizeof(*stringval) * strlen(stringval));
+
+    strcpy(copy, stringval);
+    printf("redrat_ruby_string_to_python \"%s\"\n", copy);
+
+    return PyUnicode_FromString(copy);
 }
 
 /*
@@ -430,6 +439,8 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
     pMaybeCallable = redrat_python_handoff(argv[0]);
     Py_INCREF(pMaybeCallable);
 
+    printf("fdr: about to do function application\n");
+
     /*
      * Gin up an argument tuple for the function.
      *
@@ -451,6 +462,7 @@ redrat_apply(int argc, VALUE *argv, VALUE self)
         PyTuple_SET_ITEM(pArgs, tupleWritePosition, pArg);
     }
 
+    printf("fdr: trying function application\n");
     pResult = PyObject_Call(pMaybeCallable, pArgs, NULL);
     REDRAT_ERRJMP_PYEXC(rExcApplication, pResult);
 
@@ -663,6 +675,7 @@ Init_redrat_ext()
     rb_define_attr(rb_eRedRatException, "python_value", 1, 1);
     rb_define_attr(rb_eRedRatException, "python_traceback", 1, 1);
 
+    Py_SetProgramName("play.rb");
     Py_Initialize();
 
     /* Initialize the redrat module in Python */
@@ -691,7 +704,9 @@ redrat_rubyobject_dealloc(redrat_RubyObject* self)
      * Notify Ruby that this value is no longer required by Python.  Analogous
      * to its Ruby inverse, redrat_py_decref_wrap.
      */
+#ifndef REDRAT_NO_GC
     rb_gc_unregister_address(&(self->r));
+#endif
     self->ob_type->tp_free((PyObject*)self);
 }
 
@@ -703,7 +718,7 @@ redrat_rubyobject_dealloc(redrat_RubyObject* self)
  *
  * This procedure presumes that the Python GIL and Ruby GILs are already held.
  *
- * This includes the hybridization of Ruby and Python GC.  To do this, Python
+ * This includes the hybridization of Ruby and Python GC.  To do this, Ruby
  * will get its own global variable reference (via rb_gc_register_address) and
  * in the destructor for a RubyObject the inverse, rb_gc_unregister_address
  * must be called.
@@ -715,6 +730,7 @@ redrat_python_handoff(VALUE r)
     {
         PyObject *ret;
 
+        printf("fdr: unwrapping RubyObject into Python\n");
         Data_Get_Struct(r, PyObject, ret);
 
         return ret;
@@ -723,6 +739,7 @@ redrat_python_handoff(VALUE r)
     {
         redrat_RubyObject *pyr;
 
+        printf("fdr: handing off ruby object to python\n");
         /*
          * Notify Ruby that this value has a reference somewhere otherwise
          * unknown to its mark-sweep collection pass, as so the value does not
